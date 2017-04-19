@@ -7,23 +7,28 @@ theme: metropolis
 colortheme: metropolis
 themeoptions:
     - progressbar=foot
+    - numbering=none
 ...
+
 
 # ANN for live depth estimation from video streams
 
 Specific
-  ~ Create an ANN to estimate depth maps for images of a video stream
+  ~ Create an ANN to estimate depth maps for a self recorded video
 
 Measurable
-  ~ Train/Test set recorded with Kinect, pixel by pixel measure
+  ~ Quality of the estimate is the difference between the depth value of the
+  Kinect and our predicted value
 
 Attainable
-  ~ There is work available for single images
+  ~ There is work available for single images and the information of the
+  connected frames could be used to improve the result
 
 Relevant
-  ~ Depth information can be used for many tasks: robot navigation, object segmentation, ...
+  ~ Depth information can be used for many tasks: robot navigation, object segmentation,
+  enrichment for regular cameras ...
 
 Time-bound
-  ~ This semester
+  ~ Given by the time of the semester
 
-Andrea Suckro & Sebastian Höffner
+ Sebastian Höffner & Andrea Suckro
