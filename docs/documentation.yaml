@@ -1,0 +1,12 @@
+---
+title: ANN for depth estimation on webcam streams
+author:
+    - Andrea Suckro
+    - Sebastian Höffner
+date: July 2017
+keywords:
+    - ANN
+    - depth map
+    - webcam
+nocite: "@*"
+...
