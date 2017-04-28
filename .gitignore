@@ -1,1 +1,2 @@
 *.pdf
+.autoenv*.zsh
