@@ -1,16 +1,3 @@
-%
-%
-% Andrea Suckro; Sebastian Höffner
-
----
-theme: metropolis
-colortheme: metropolis
-themeoptions:
-    - progressbar=foot
-    - numbering=none
-...
-
-
 # ANN for live depth estimation from video streams
 
 Specific
