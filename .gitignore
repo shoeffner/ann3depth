@@ -1,3 +1,4 @@
 *.pdf
 .autoenv*.zsh
 build
+data
