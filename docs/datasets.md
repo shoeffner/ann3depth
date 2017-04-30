@@ -98,10 +98,10 @@
 
 ```tex
 @inproceedings{ammirato2017,
-    author = "Phil Ammirato and Patrick Poirson and Eunbyung Park and Jana Kosecka and Alexander C. Berg",
-    title = {A Dataset for Developing and Benchmarking Active Vision},
-    booktitle={IEEE International Conference on Robotics and Automation (ICRA)},
-    year={2017}
+    author    = "Phil Ammirato and Patrick Poirson and Eunbyung Park and Jana Kosecka and Alexander C. Berg",
+    title     = {A Dataset for Developing and Benchmarking Active Vision},
+    booktitle = {IEEE International Conference on Robotics and Automation (ICRA)},
+    year      = {2017}
 }
 ```
 
