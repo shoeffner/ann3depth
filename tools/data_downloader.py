@@ -17,6 +17,7 @@ import os
 import re
 import sys
 import textwrap
+import tarfile
 
 from contextlib import closing
 from multiprocessing import Pool
@@ -125,24 +126,26 @@ def download_file(url_path):
     url, path = url_path
 
     try:
-        local_size = os.stat(path).st_size
+        local_size = round(os.stat(path).st_size/2**20, 2)
+        print(f'LocalSize is {local_size}')
     except FileNotFoundError:
         os.makedirs(os.path.dirname(path), mode=0o755, exist_ok=True)
         local_size = -1
 
     with closing(requests.get(url, stream=True)) as request:
         try:
-            remote_size = int(request.headers['Content-Length'])
+            remote_size = round(int(request.headers['Content-Length'])/2**20, 2)
+            unit = 'MB'
         except KeyError as e:
             print(request.headers)
             return f'Unable to download {url}, KeyError: {e}'
         if local_size == remote_size:
-            return f'Skipped {url}: Size of {remote_size} B would be unchanged.'
+            return f'Skipped {url}: Size of {remote_size} {unit} would be unchanged.'
         with open(path, 'wb') as local_file:
-            print(f'Starting download of {remote_size} B from {url} to {path}.')
+            print(f'Starting download of {remote_size} {unit} from {url} to {path}.')
             for content in request.iter_content(chunk_size=1024):
                 local_file.write(content)
-    return f'Downloaded {remote_size} B from {url} to {path}.'
+    return f'Downloaded {remote_size} {unit} from {url} to {path}.'
 
 
 def download_dataset(dataset):
@@ -152,6 +155,8 @@ def download_dataset(dataset):
                            [(url, fn(url)) for url in dataset.file_urls])
     print('Results:', end='\n\t')
     print(*results, sep='\n\t')
+
+    unpack_dataset(os.path.join('data', dataset.key, 'raw'))
 
 
 def download_datasets(datasets):
@@ -164,6 +169,22 @@ def download_datasets(datasets):
 
     for d in data:
         download_dataset(d)
+
+
+def unpack_dataset(path):
+    """
+    Unpacks all compressed data files.
+    Args:
+        path: the folder that contains all packaged files
+    """
+    destfolder = os.path.join(os.path.dirname(path), 'unpacked')
+    print(f'Extract archives to {destfolder}')
+    for item in os.listdir(path):
+        if item.endswith('tar.gz') or item.endswith('tgz'):
+            print(f'Extracting {item}')
+            tar = tarfile.open(os.path.join(path, item))
+            tar.extractall(os.path.join(destfolder, item[0:item.find('.')]))
+            tar.close()
 
 
 def list_datasets():

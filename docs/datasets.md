@@ -59,7 +59,7 @@
 
 > This dataset contains aligned image and range data.
 
-- Size: unknown
+- Size: 889 MB
 - URL: http://make3d.cs.cornell.edu/data.html#make3d
 
 ```tex
@@ -104,4 +104,3 @@
     year      = {2017}
 }
 ```
-

@@ -2,3 +2,6 @@
 .autoenv*.zsh
 build
 data
+
+.idea/
+.DS_Store
