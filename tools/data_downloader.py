@@ -126,7 +126,7 @@ def download_file(url_path):
     url, path = url_path
 
     try:
-        local_size = round(os.stat(path).st_size/2**20, 2)
+        local_size = round(os.stat(path).st_size / 2 ** 20, 2)
         print(f'LocalSize is {local_size}')
     except FileNotFoundError:
         os.makedirs(os.path.dirname(path), mode=0o755, exist_ok=True)
@@ -134,7 +134,8 @@ def download_file(url_path):
 
     with closing(requests.get(url, stream=True)) as request:
         try:
-            remote_size = round(int(request.headers['Content-Length'])/2**20, 2)
+            remote_size = round(
+                int(request.headers['Content-Length']) / 2 ** 20, 2)
             unit = 'MB'
         except KeyError as e:
             print(request.headers)
@@ -142,14 +143,16 @@ def download_file(url_path):
         if local_size == remote_size:
             return f'Skipped {url}: Size of {remote_size} {unit} would be unchanged.'
         with open(path, 'wb') as local_file:
-            print(f'Starting download of {remote_size} {unit} from {url} to {path}.')
+            print(
+                f'Starting download of {remote_size} {unit} from {url} to {path}.')
             for content in request.iter_content(chunk_size=1024):
                 local_file.write(content)
     return f'Downloaded {remote_size} {unit} from {url} to {path}.'
 
 
 def download_dataset(dataset):
-    fn = lambda url: os.path.join('data', dataset.key, 'raw', os.path.basename(url))
+    fn = lambda url: os.path.join(
+        'data', dataset.key, 'raw', os.path.basename(url))
     with Pool(4) as pool:
         results = pool.map(download_file,
                            [(url, fn(url)) for url in dataset.file_urls])
