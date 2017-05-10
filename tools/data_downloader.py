@@ -132,7 +132,7 @@ def download_file(url_path):
         os.makedirs(os.path.dirname(path), mode=0o755, exist_ok=True)
         local_size = -1
 
-    with closing(requests.get(url, stream=True)) as request:
+    with closing(requests.get(url, stream=True, timeout=20)) as request:
         try:
             remote_size = round(
                 int(request.headers['Content-Length']) / 2 ** 20, 2)
@@ -186,9 +186,8 @@ def unpack_dataset(path):
     for item in os.listdir(path):
         if item.endswith('tar.gz') or item.endswith('tgz'):
             print(f'Extracting {item}')
-            tar = tarfile.open(os.path.join(path, item))
-            tar.extractall(os.path.join(destfolder, item[0:item.find('.')]))
-            tar.close()
+            with tarfile.open(os.path.join(path, item)) as tar:
+                tar.extractall(os.path.join(destfolder, item[:item.find('.')]))
 
 
 def list_datasets():
