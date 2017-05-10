@@ -159,7 +159,8 @@ def download_dataset(dataset):
     print('Results:', end='\n\t')
     print(*results, sep='\n\t')
 
-    unpack_dataset(os.path.join('data', dataset.key, 'raw'))
+    if results:
+        unpack_dataset(os.path.join('data', dataset.key, 'raw'))
 
 
 def download_datasets(datasets):
