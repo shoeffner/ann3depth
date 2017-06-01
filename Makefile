@@ -14,6 +14,18 @@ ifeq (preprocess,$(firstword $(MAKECMDGOALS)))
     $(eval $(DATASETS):;@:)
 endif
 
+
+# run
+.PHONY: run
+run: data
+	python3 src/ann3depth.py
+
+
+# inspect samples
+.PHONY: browse
+browse:
+	PYTHONPATH=src python3 src/visualize/dataviewer.py
+
 # project documentation
 .PHONY: doc
 doc: ${OUT_DIR}
