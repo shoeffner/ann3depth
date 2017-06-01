@@ -1,2 +1,6 @@
 tensorflow>=1.1.0
 requests>=2.13.0
+scipy
+pillow
+matplotlib>=2.0.0
+h5py

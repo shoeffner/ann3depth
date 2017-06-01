@@ -8,6 +8,11 @@ ifeq (download,$(firstword $(MAKECMDGOALS)))
     $(eval $(DATASETS):;@:)
 endif
 
+# Check if preprocessing is wanted, and if so, set dataset names
+ifeq (preprocess,$(firstword $(MAKECMDGOALS)))
+    DATASETS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+    $(eval $(DATASETS):;@:)
+endif
 
 # project documentation
 .PHONY: doc
@@ -30,6 +35,11 @@ datasets:
 download: ${DATA_DIR}
 	@python3 tools/data_downloader.py $(DATASETS)
 
+
+# preprocess data sets and extract them
+.PHONY: preprocess
+preprocess: download ${DATA_DIR}
+	@python3 tools/data_preprocessor.py $(DATASETS)
 
 # 1 page SMART goals presentation slide
 .PHONY: smart
