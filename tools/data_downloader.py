@@ -18,6 +18,7 @@ import re
 import sys
 import textwrap
 import tarfile
+import shutil
 
 from contextlib import closing
 from multiprocessing import Pool
@@ -53,7 +54,7 @@ class Dataset:
         <bibtex references>
         ```
 
-        ## Files
+        # Files
 
         - <file url>
         - <file url>
@@ -188,6 +189,39 @@ def unpack_dataset(path):
             print(f'Extracting {item}')
             with tarfile.open(os.path.join(path, item)) as tar:
                 tar.extractall(os.path.join(destfolder, item[:item.find('.')]))
+        else:
+            if not os.path.isdir(destfolder):
+                os.makedirs(destfolder)
+            shutil.copy2(os.path.join(path, item),
+                         os.path.join(destfolder, item))
+    flatten_folders(destfolder)
+
+
+def flatten_folders(path):
+    """
+    Normalizes a folder such that it's subfolders contain no more folders but only files.
+    Args:
+        path: the top folder in which the subfolders should be normalized.
+    """
+    if os.path.isdir(path):
+        for item in os.listdir(path):
+            for root, dirs, files in os.walk(os.path.join(path, item)):
+                if len(dirs) > 0:
+                    for subdir in dirs:
+                        files = os.listdir(os.path.join(path, item, subdir))
+                        for f in files:
+                            dest = os.path.join(root)
+                            source = os.path.join(root, subdir, f)
+                            if os.path.isdir(source):
+                                files2 = os.listdir(
+                                    os.path.join(path, item, subdir, f))
+                                for f2 in files2:
+                                    dest = os.path.join(root)
+                                    source = os.path.join(root, subdir, f, f2)
+                                    shutil.copy2(source, dest)
+                            else:
+                                shutil.copy2(source, dest)
+                        shutil.rmtree(os.path.join(path, item, subdir))
 
 
 def list_datasets():
