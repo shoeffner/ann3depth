@@ -1,7 +1,10 @@
 *.pdf
 .autoenv*.zsh
 build
+__pycache__
 data
 
 .idea/
 .DS_Store
+.*.swp
+
