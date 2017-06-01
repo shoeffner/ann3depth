@@ -12,7 +12,7 @@ HEIGHT = 480
 D_WIDTH = 55 * WIDTH // HEIGHT
 D_HEIGHT = 55
 
-START = 125
+START = 0
 LIMIT = None
 
 
@@ -124,30 +124,32 @@ def __process_nyu(path_train, path_test):
 
 
 def main():
-    path_train = os.path.join('data', 'train')
-    path_test = os.path.join('data', 'test')
-    try:
-        os.makedirs(path_train, 0o755)
-    except OSError:
-        pass
-    try:
-        os.makedirs(path_test, 0o755)
-    except OSError:
-        pass
-
-    print('\nPreprocessing data...')
-    print(f'Images: {WIDTH}x{HEIGHT} Depths: {D_WIDTH}x{D_HEIGHT}')
-
     processors = {
         'make3d1': __process_make3d1,
         'make3d2': __process_make3d2,
         'nyu': __process_nyu,
     }
 
+    path_train = os.path.join('data', 'train')
+    path_test = os.path.join('data', 'test')
+    for k in processors:
+        try:
+            os.makedirs(os.path.join(path_train, k), 0o755)
+        except OSError:
+            pass
+        try:
+            os.makedirs(os.path.join(path_test, k), 0o755)
+        except OSError:
+            pass
+
+    print('\nPreprocessing data...')
+    print(f'Images: {WIDTH}x{HEIGHT} Depths: {D_WIDTH}x{D_HEIGHT}')
+
     for key, processor in processors.items():
         if key in sys.argv:
             print(f'Preprocessing {key}')
-            processor(path_train, path_test)
+            processor(os.path.join(path_train, key),
+                      os.path.join(path_test, key))
     print('Preprocessing done.')
 
 
