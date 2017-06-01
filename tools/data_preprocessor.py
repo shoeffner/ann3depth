@@ -1,3 +1,16 @@
+"""
+Converts all data to the same dimensions and into the same formats.
+
+Skips and reports broken data.
+
+The variables WIDTH, HEIGHT, D_WIDTH, D_HEIGHT control the image and depth map
+dimensions. The variables START and LIMIT describe the range of samples to
+convert and default to "all".
+
+Careful! Currently all methods don't test if they match the correct depth and
+images, but make the assumption that they always follow the same name scheme and
+are thus ordered!
+"""
 import os
 import sys
 
@@ -17,10 +30,12 @@ LIMIT = None
 
 
 def include(img):
+    """Filter to remove files which are not part of the datasets."""
     return img[img.index('.') + 1:] not in ['txt']
 
 
 def __process_make3d1(path_train, path_test):
+    """Converts data of make3d1."""
     path = os.path.join('data', 'make3d1', 'unpacked')
     depth_path = [os.path.join(path, d) for d in ['Train400Depth',
                                                   'Test134Depth']]
@@ -57,6 +72,7 @@ def __process_make3d1(path_train, path_test):
 
 
 def __process_make3d2(path_train, path_test):
+    """Converts data of make3d2. Needs to perform a rotation."""
     path = os.path.join('data', 'make3d2', 'unpacked')
 
     depth_path = [os.path.join(path, d) for d in ['Dataset3_Depths',
@@ -92,6 +108,7 @@ def __process_make3d2(path_train, path_test):
 
 
 def __process_nyu(path_train, path_test):
+    """Converts data of nyu. Extracts data from single mat file."""
     target_path = [path_train, path_test]
 
     train_images = 5
@@ -129,6 +146,9 @@ def __process_nyu(path_train, path_test):
 
 
 def main():
+    """Creates directories per dataset in data/train and data/test. Then
+    converts all data matching keys in sys.argv to the requested sizes and
+    stores all as png files."""
     processors = {
         'make3d1': __process_make3d1,
         'make3d2': __process_make3d2,
