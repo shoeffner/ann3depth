@@ -26,7 +26,7 @@ D_WIDTH = 55 * WIDTH // HEIGHT
 D_HEIGHT = 55
 
 START = 0
-LIMIT = None
+LIMIT = None  # Default: None
 
 
 def include(img):
@@ -108,7 +108,8 @@ def __process_make3d2(path_train, path_test):
 
 
 def __process_nyu(path_train, path_test):
-    """Converts data of nyu. Extracts data from single mat file."""
+    """Converts data of nyu. Extracts data from single mat file.
+    Rotates images by 90 degrees clock-wise."""
     target_path = [path_train, path_test]
 
     train_images = 5
@@ -128,7 +129,9 @@ def __process_nyu(path_train, path_test):
                 break
 
             img = smisc.imresize(i, (WIDTH, HEIGHT))
+            img = np.rot90(img, k=-1)
             depth = smisc.imresize(d, (D_WIDTH, D_HEIGHT))
+            depth = np.rot90(depth, k=-1)
 
             try:
                 name = (''.join(map(chr, mat[n][:].T[0]))
