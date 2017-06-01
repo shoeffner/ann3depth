@@ -107,20 +107,25 @@ def __process_nyu(path_train, path_test):
                 c += 1
                 continue
 
+            if LIMIT and c >= LIMIT:
+                break
+
             img = smisc.imresize(i, (WIDTH, HEIGHT))
             depth = smisc.imresize(d, (D_WIDTH, D_HEIGHT))
 
-            name = (''.join(map(chr, mat[n][:].T[0]))
-                    .replace('/', '_')
-                    .replace('.', '_'))[:-4]
+            try:
+                name = (''.join(map(chr, mat[n][:].T[0]))
+                        .replace('/', '_')
+                        .replace('.', '_'))[:-4]
+            except TypeError as te:
+                print(f'Skipping sample {c}. Reason: {te}')
 
             smisc.imsave(os.path.join(target_path[0 if c % train_images else 1],
                                       f'{name}-image.png'), img)
             smisc.imsave(os.path.join(target_path[0 if c % train_images else 1],
                                       f'{name}-depth.png'), depth)
+
             c += 1
-            if c >= LIMIT:
-                break
 
 
 def main():
