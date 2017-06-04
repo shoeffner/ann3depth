@@ -44,6 +44,10 @@ def __process_make3d1(path_train, path_test):
 
     target_path = [path_train, path_test]
 
+    if os.listdir(path_train) != [] or os.listdir(path_test) != []:
+        print(f'At least one of the target directories is not empty: {target_path}, aborting preprocessing...')
+        return
+
     for dp, ip, tp in zip(depth_path, img_path, target_path):
         print(f'Preprocessing images in {dp} and {ip}')
 
@@ -81,6 +85,10 @@ def __process_make3d2(path_train, path_test):
                                                 'Dataset2_Images']]
     target_path = [path_train, path_test]
 
+    if os.listdir(path_train) != [] or os.listdir(path_test) != []:
+        print(f'At least one of the target directories is not empty: {target_path}, aborting preprocessing...')
+        return
+
     for dp, ip, tp in zip(depth_path, img_path, target_path):
         print(f'Preprocessing images in {dp} and {ip}')
 
@@ -115,6 +123,10 @@ def __process_nyu(path_train, path_test):
     train_images = 5
 
     path = os.path.join('data', 'nyu', 'unpacked', 'nyu_depth_v2_labeled.mat')
+
+    if os.listdir(path_train) != [] or os.listdir(path_test) != []:
+        print(f'At least one of the target directories is not empty: {target_path}, aborting preprocessing...')
+        return
 
     c = 0
     with h5py.File(path) as mat:
@@ -151,7 +163,8 @@ def __process_nyu(path_train, path_test):
 def main():
     """Creates directories per dataset in data/train and data/test. Then
     converts all data matching keys in sys.argv to the requested sizes and
-    stores all as png files."""
+    stores all as png files. If no key is provided it tries to processes
+    all datasets."""
     processors = {
         'make3d1': __process_make3d1,
         'make3d2': __process_make3d2,
@@ -174,7 +187,12 @@ def main():
     print(f'Images: {WIDTH}x{HEIGHT} Depths: {D_WIDTH}x{D_HEIGHT}')
 
     for key, processor in processors.items():
-        if key in sys.argv:
+        if len(sys.argv) > 1:
+            if key in sys.argv:
+                print(f'Preprocessing {key}')
+                processor(os.path.join(path_train, key),
+                          os.path.join(path_test, key))
+        else:  # try to preprocess everything
             print(f'Preprocessing {key}')
             processor(os.path.join(path_train, key),
                       os.path.join(path_test, key))

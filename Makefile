@@ -64,7 +64,7 @@ smart: ${OUT_DIR}
 
 .PHONY: install
 install: requirements.txt
-	pip install -r requirements.txt -U
+	pip3 install -r requirements.txt -U
 
 ${OUT_DIR}:
 	@mkdir -p ${OUT_DIR}
