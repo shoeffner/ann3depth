@@ -8,6 +8,23 @@ ifeq (download,$(firstword $(MAKECMDGOALS)))
     $(eval $(DATASETS):;@:)
 endif
 
+# Check if preprocessing is wanted, and if so, set dataset names
+ifeq (preprocess,$(firstword $(MAKECMDGOALS)))
+    DATASETS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+    $(eval $(DATASETS):;@:)
+endif
+
+
+# run
+.PHONY: run
+run: data
+	python3 src/ann3depth.py
+
+
+# inspect samples
+.PHONY: browse
+browse:
+	PYTHONPATH=src python3 src/visualize/dataviewer.py
 
 # project documentation
 .PHONY: doc
@@ -31,6 +48,12 @@ download: ${DATA_DIR}
 	@python3 tools/data_downloader.py $(DATASETS)
 
 
+# preprocess data sets and extract them
+.PHONY: preprocess
+preprocess: download ${DATA_DIR}
+	@python3 tools/data_preprocessor.py $(DATASETS)
+
+
 # 1 page SMART goals presentation slide
 .PHONY: smart
 smart: ${OUT_DIR}
@@ -41,7 +64,7 @@ smart: ${OUT_DIR}
 
 .PHONY: install
 install: requirements.txt
-	pip install -r requirements.txt -U
+	pip3 install -r requirements.txt -U
 
 ${OUT_DIR}:
 	@mkdir -p ${OUT_DIR}

@@ -54,7 +54,7 @@ class Dataset:
         <bibtex references>
         ```
 
-        ## Files
+        # Files
 
         - <file url>
         - <file url>
@@ -127,15 +127,16 @@ def download_file(url_path):
     url, path = url_path
 
     try:
-        local_size = round(os.stat(path).st_size/2**20, 2)
+        local_size = round(os.stat(path).st_size / 2 ** 20, 2)
         print(f'LocalSize is {local_size}')
     except FileNotFoundError:
         os.makedirs(os.path.dirname(path), mode=0o755, exist_ok=True)
         local_size = -1
 
-    with closing(requests.get(url, stream=True)) as request:
+    with closing(requests.get(url, stream=True, timeout=20)) as request:
         try:
-            remote_size = round(int(request.headers['Content-Length'])/2**20, 2)
+            remote_size = round(
+                int(request.headers['Content-Length']) / 2 ** 20, 2)
             unit = 'MB'
         except KeyError as e:
             print(request.headers)
@@ -143,21 +144,24 @@ def download_file(url_path):
         if local_size == remote_size:
             return f'Skipped {url}: Size of {remote_size} {unit} would be unchanged.'
         with open(path, 'wb') as local_file:
-            print(f'Starting download of {remote_size} {unit} from {url} to {path}.')
+            print(
+                f'Starting download of {remote_size} {unit} from {url} to {path}.')
             for content in request.iter_content(chunk_size=1024):
                 local_file.write(content)
     return f'Downloaded {remote_size} {unit} from {url} to {path}.'
 
 
 def download_dataset(dataset):
-    fn = lambda url: os.path.join('data', dataset.key, 'raw', os.path.basename(url))
+    fn = lambda url: os.path.join(
+        'data', dataset.key, 'raw', os.path.basename(url))
     with Pool(4) as pool:
         results = pool.map(download_file,
                            [(url, fn(url)) for url in dataset.file_urls])
     print('Results:', end='\n\t')
     print(*results, sep='\n\t')
 
-    unpack_dataset(os.path.join('data', dataset.key, 'raw'))
+    if results:
+        unpack_dataset(os.path.join('data', dataset.key, 'raw'))
 
 
 def download_datasets(datasets):
@@ -184,11 +188,12 @@ def unpack_dataset(path):
         if item.endswith('tar.gz') or item.endswith('tgz'):
             print(f'Extracting {item}')
             with tarfile.open(os.path.join(path, item)) as tar:
-                tar.extractall(os.path.join(destfolder, item[0:item.find('.')]))
+                tar.extractall(os.path.join(destfolder, item[:item.find('.')]))
         else:
             if not os.path.isdir(destfolder):
                 os.makedirs(destfolder)
-            shutil.copy2(os.path.join(path, item), os.path.join(destfolder, item))
+            shutil.copy2(os.path.join(path, item),
+                         os.path.join(destfolder, item))
     flatten_folders(destfolder)
 
 
@@ -198,7 +203,7 @@ def flatten_folders(path):
     Args:
         path: the top folder in which the subfolders should be normalized.
     """
-    if(os.path.isdir(path)):
+    if os.path.isdir(path):
         for item in os.listdir(path):
             for root, dirs, files in os.walk(os.path.join(path, item)):
                 if len(dirs) > 0:
@@ -208,7 +213,8 @@ def flatten_folders(path):
                             dest = os.path.join(root)
                             source = os.path.join(root, subdir, f)
                             if os.path.isdir(source):
-                                files2 = os.listdir(os.path.join(path, item, subdir, f))
+                                files2 = os.listdir(
+                                    os.path.join(path, item, subdir, f))
                                 for f2 in files2:
                                     dest = os.path.join(root)
                                     source = os.path.join(root, subdir, f, f2)

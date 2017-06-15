@@ -17,6 +17,7 @@ make datasets
 make download make3d1
 make download make3d2 nyu
 make download all
+make preprocess nyu
 make smart
 make doc
 ```
