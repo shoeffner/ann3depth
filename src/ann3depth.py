@@ -11,12 +11,18 @@ def train_network(network, dataset, epochs):
 
 
 def browse_data(dataset):
-    visualize.DataBrowser(dataset, key='depth')
+    visualize.DataBrowser(dataset,
+                          name='Inputs',
+                          keys=['img', 'depth'],
+                          cmaps={'depth': 'jet'})
     plt.show(False)
 
 
 def browse_results(dataset):
-    visualize.DataBrowser(dataset, key='result', cmap='gray')
+    visualize.DataBrowser(dataset,
+                          name='Results',
+                          keys=['img', 'depth', 'result'],
+                          cmaps={'depth': 'jet', 'result': 'gray'})
     plt.show(True)
 
 

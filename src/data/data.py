@@ -13,7 +13,6 @@ class Sample:
         self.dataset = os.path.basename(os.path.dirname(depth_path))
         self.img = smisc.imread(img_path)
         self.depth = smisc.imread(depth_path)
-        self.result = None
 
     def __str__(self):
         return '\n  '.join(

@@ -1,3 +1,4 @@
+import itertools
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib import image
@@ -6,44 +7,35 @@ from mpl_toolkits.mplot3d import Axes3D
 
 class DataBrowser:
 
-    def __init__(self, dataset, *, rows=2, key='depth', cmap='jet'):
+    def __init__(self, dataset, *,
+                 rows=2,
+                 keys=['img', 'depth'],
+                 cmaps={'depth': 'jet'},
+                 name=None):
         self.dataset = dataset
         self.rows = rows
-
-        self.datakey = key
-        self.cmap = cmap
+        self.keys = keys
 
         self.current = 0
 
-        self.figure = plt.figure()
-        self.keycb = self.figure.canvas.mpl_connect(
-                'key_press_event',
-                lambda event: self.__key_press_event(event))
+        self.figure, self.axes = plt.subplots(rows, len(self.keys))
+        if name:
+            self.figure.canvas.set_window_title(name)
 
-        self.axes = []
-        for i, row in enumerate(range(rows), 1):
-            img_axes = self.figure.add_subplot(rows, 2, 2 * i - 1)
-            img_axes.set_xlim([0, self.dataset[0].img.shape[1]])
-            img_axes.set_ylim([self.dataset[0].img.shape[0], 0])
-            img_axes.set_aspect('equal')
-
-            img = img_axes.add_image(image.AxesImage(img_axes))
-
-            key_axes = self.figure.add_subplot(rows, 2, 2 * i)
-            if (hasattr(self.dataset[0], key) and
-                    getattr(self.dataset[0], key) is not None):
-                key_axes.set_xlim([0, getattr(self.dataset[0], key).shape[1]])
-                key_axes.set_ylim([getattr(self.dataset[0], key).shape[0], 0])
-            key_axes.set_aspect('equal')
-
-            key_img = key_axes.add_image(image.AxesImage(key_axes,
-                                                         cmap=self.cmap))
-
-            self.axes.append((img_axes, img, key_axes, key_img))
+        self.axes = self.axes.flatten()
+        self.images = []
+        for i, axes in enumerate(self.axes):
+            cmap = cmaps[keys[i % len(keys)]] if keys[i % len(keys)] in cmaps \
+                                              else None
+            img = image.AxesImage(axes, cmap=cmap)
+            axes.set_aspect('equal')
+            self.images.append(axes.add_image(img))
 
         self.show_next()
 
-        self.figure.show()
+        self.keycb = self.figure.canvas.mpl_connect(
+                'key_press_event',
+                lambda event: self.__key_press_event(event))
 
     def show_next(self):
         self.update_axes()
@@ -54,25 +46,19 @@ class DataBrowser:
 
     def update_axes(self):
         first = self.current
-        for ia, i, ka, ki in self.axes:
-            ia.set_title(self.dataset[self.current].name)
-            i.set_data(self.dataset[self.current].img)
-            ia.set_xlim([0, self.dataset[self.current].img.shape[1]])
-            ia.set_ylim([self.dataset[self.current].img.shape[0], 0])
-
-            if getattr(self.dataset[self.current], self.datakey) is not None:
-                print(getattr(self.dataset[self.current], self.datakey))
-                ka.set_title(self.dataset[self.current].name)
-                ki.set_data(getattr(self.dataset[self.current], self.datakey))
-
-                ka.set_xlim([0, getattr(self.dataset[self.current],
-                                        self.datakey).shape[1]])
-                ka.set_ylim([getattr(self.dataset[self.current],
-                                     self.datakey).shape[0], 0])
+        for axes, img, key in zip(self.axes, self.images,
+                                  itertools.cycle(self.keys)):
+            sample = self.dataset[self.current]
+            if hasattr(sample, key) and getattr(sample, key) is not None:
+                data = getattr(sample, key)
+                img.set_data(data)
+                axes.set_xlim([0, data.shape[1]])
+                axes.set_ylim([data.shape[0], 0])
             else:
-                ki.set_data(np.array([[1]]))
+                img.set_data(np.array([[1]]))
 
-            self.current = (self.current + 1) % len(self.dataset)
+            if key == self.keys[-1]:
+                self.current = (self.current + 1) % len(self.dataset)
 
         self.figure.suptitle(f'Showing samples {first} to {self.current - 1}')
         self.figure.canvas.draw()
