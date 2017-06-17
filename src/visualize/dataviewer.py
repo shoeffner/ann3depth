@@ -1,3 +1,4 @@
+import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib import image
 from mpl_toolkits.mplot3d import Axes3D
@@ -5,9 +6,12 @@ from mpl_toolkits.mplot3d import Axes3D
 
 class DataBrowser:
 
-    def __init__(self, dataset, *, rows=2):
+    def __init__(self, dataset, *, rows=2, key='depth', cmap='jet'):
         self.dataset = dataset
         self.rows = rows
+
+        self.datakey = key
+        self.cmap = cmap
 
         self.current = 0
 
@@ -25,15 +29,17 @@ class DataBrowser:
 
             img = img_axes.add_image(image.AxesImage(img_axes))
 
-            depth_axes = self.figure.add_subplot(rows, 2, 2 * i)
-            depth_axes.set_xlim([0, self.dataset[0].depth.shape[1]])
-            depth_axes.set_ylim([self.dataset[0].depth.shape[0], 0])
-            depth_axes.set_aspect('equal')
+            key_axes = self.figure.add_subplot(rows, 2, 2 * i)
+            if (hasattr(self.dataset[0], key) and
+                    getattr(self.dataset[0], key) is not None):
+                key_axes.set_xlim([0, getattr(self.dataset[0], key).shape[1]])
+                key_axes.set_ylim([getattr(self.dataset[0], key).shape[0], 0])
+            key_axes.set_aspect('equal')
 
-            depth_img = depth_axes.add_image(image.AxesImage(depth_axes,
-                                                             cmap='jet'))
+            key_img = key_axes.add_image(image.AxesImage(key_axes,
+                                                         cmap=self.cmap))
 
-            self.axes.append((img_axes, img, depth_axes, depth_img))
+            self.axes.append((img_axes, img, key_axes, key_img))
 
         self.show_next()
 
@@ -48,17 +54,23 @@ class DataBrowser:
 
     def update_axes(self):
         first = self.current
-        for ia, i, da, di in self.axes:
+        for ia, i, ka, ki in self.axes:
             ia.set_title(self.dataset[self.current].name)
             i.set_data(self.dataset[self.current].img)
             ia.set_xlim([0, self.dataset[self.current].img.shape[1]])
             ia.set_ylim([self.dataset[self.current].img.shape[0], 0])
 
-            da.set_title(self.dataset[self.current].name)
-            di.set_data(self.dataset[self.current].depth)
+            if getattr(self.dataset[self.current], self.datakey) is not None:
+                print(getattr(self.dataset[self.current], self.datakey))
+                ka.set_title(self.dataset[self.current].name)
+                ki.set_data(getattr(self.dataset[self.current], self.datakey))
 
-            da.set_xlim([0, self.dataset[self.current].depth.shape[1]])
-            da.set_ylim([self.dataset[self.current].depth.shape[0], 0])
+                ka.set_xlim([0, getattr(self.dataset[self.current],
+                                        self.datakey).shape[1]])
+                ka.set_ylim([getattr(self.dataset[self.current],
+                                     self.datakey).shape[0], 0])
+            else:
+                ki.set_data(np.array([[1]]))
 
             self.current = (self.current + 1) % len(self.dataset)
 

@@ -7,12 +7,17 @@ import threading
 
 
 def train_network(network, dataset, epochs):
-    print(network, len(dataset), epochs)
+    network(dataset)
 
 
-def browse_data(dataset, blocking=True):
-    visualize.DataBrowser(dataset)
-    plt.show(blocking)
+def browse_data(dataset):
+    visualize.DataBrowser(dataset, key='depth')
+    plt.show(False)
+
+
+def browse_results(dataset):
+    visualize.DataBrowser(dataset, key='result', cmap='gray')
+    plt.show(True)
 
 
 def generate_network(network, dataset):
@@ -29,13 +34,11 @@ def main():
                                 args=(network, dataset, 1))
     training.start()
 
-    browse_data(dataset, blocking=False)
+    browse_data(dataset)
 
     training.join()
 
-    results = dataset
-
-    browse_data(results)
+    browse_results(dataset)
 
 
 if __name__ == '__main__':
