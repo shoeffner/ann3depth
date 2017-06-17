@@ -18,7 +18,7 @@ endif
 # run
 .PHONY: run
 run: data
-	python3 src/ann3depth.py
+	TF_CPP_MIN_LOG_LEVEL=2 python3 src/ann3depth.py
 
 
 # inspect samples
