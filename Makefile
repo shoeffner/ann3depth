@@ -1,5 +1,6 @@
 OUT_DIR := build
 DATA_DIR := data
+CKPT_DIR := checkpoints
 
 # Check if download is wanted, and if so, set dataset names
 # see http://stackoverflow.com/a/14061796/3004221
@@ -18,7 +19,7 @@ endif
 # run
 .PHONY: run
 run: data
-	TF_CPP_MIN_LOG_LEVEL=2 python3 src/ann3depth.py
+	TF_CPP_MIN_LOG_LEVEL=2 CKPT_DIR=${CKPT_DIR} python3 src/ann3depth.py
 
 
 # inspect samples
@@ -71,3 +72,6 @@ ${OUT_DIR}:
 
 ${DATA_DIR}:
 	@mkdir -p ${DATA_DIR}
+
+${CKPT_DIR}:
+	@mkdir -p ${CKPT_DIR}

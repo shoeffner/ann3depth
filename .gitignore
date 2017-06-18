@@ -1,10 +1,13 @@
-*.pdf
-.autoenv*.zsh
-build
-__pycache__
+/build/*
+/checkpoints/*
 /data/*
 
+__pycache__
+*.pdf
+
 .idea/
+.autoenv*.zsh
+
 .DS_Store
 .*.swp
 
