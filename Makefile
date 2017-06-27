@@ -26,6 +26,7 @@ run: data
 browse:
 	PYTHONPATH=src python3 src/visualize/dataviewer.py
 
+
 # project documentation
 .PHONY: doc
 doc: ${OUT_DIR}
@@ -59,15 +60,27 @@ preprocess: download ${DATA_DIR}
 smart: ${OUT_DIR}
 	pandoc -t beamer \
 		-o ${OUT_DIR}/anndepth_assh_smart.pdf \
-		docs/SMART-presentation.md \
-		docs/SMART-presentation.yaml
+		docs/presentations/SMART-presentation.md \
+		docs/presentations/SMART-presentation.yaml
+
+
+# Status presentation slides
+.PHONY: status
+status: ${OUT_DIR}
+	pandoc -t beamer \
+		-o ${OUT_DIR}/anndepth_assh_status.pdf \
+		docs/presentations/Status-presentation.md \
+		docs/presentations/Status-presentation.yaml
+
 
 .PHONY: install
 install: requirements.txt
 	pip3 install -r requirements.txt -U
 
+
 ${OUT_DIR}:
 	@mkdir -p ${OUT_DIR}
+
 
 ${DATA_DIR}:
 	@mkdir -p ${DATA_DIR}

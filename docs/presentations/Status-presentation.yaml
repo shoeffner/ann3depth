@@ -1,0 +1,10 @@
+---
+author:
+    - Andrea Suckro
+    - Sebastian Höffner
+theme: metropolis
+colortheme: metropolis
+themeoptions:
+    - progressbar=foot
+    - numbering=none
+...
