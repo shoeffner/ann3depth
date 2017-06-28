@@ -21,6 +21,9 @@ endif
 run: data
 	TF_CPP_MIN_LOG_LEVEL=2 CKPT_DIR=${CKPT_DIR} python3 src/ann3depth.py
 
+.PHONY: verbose
+verbose: data
+	TF_CPP_MIN_LOG_LEVEL=2 CKPT_DIR=${CKPT_DIR} python3 src/ann3depth.py -d -r
 
 # inspect samples
 .PHONY: browse

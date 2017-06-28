@@ -1,3 +1,5 @@
+import argparse
+
 from matplotlib import pyplot as plt
 
 import data
@@ -19,7 +21,6 @@ def browse_data(dataset):
                           name='Inputs',
                           keys=['img', 'depth'],
                           cmaps={'depth': 'jet'})
-    plt.show(False)
 
 
 def browse_results(dataset):
@@ -27,11 +28,9 @@ def browse_results(dataset):
                           name='Results',
                           keys=['img', 'depth', 'result'],
                           cmaps={'depth': 'jet', 'result': 'gray'})
-    plt.show(True)
 
 
-def main():
-    print('loading data')
+def main(browse=False, show_results=False):
     dataset = data.training(dataset=['make3d1', 'make3d2'], samples=20)
 
     network = generate_network(networks.DepthMapNetwork, dataset)
@@ -40,12 +39,26 @@ def main():
                                 args=(network, dataset, 1))
     training.start()
 
-    browse_data(dataset)
+    # Open data browser if requested
+    if browse:
+        browse_data(dataset)
+        if show_results:
+            plt.show(False)
 
     training.join()
 
-    browse_results(dataset)
+    # Open results browser if requested
+    if show_results:
+        browse_results(dataset)
+        plt.show(True)
+    elif browse:
+        plt.show(True)
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', action='store_true', help='Enable data viewer')
+    parser.add_argument('-r', action='store_true', help='Enable result viewer')
+    args = parser.parse_args()
+
+    main(browse=args.d, show_results=args.r)
