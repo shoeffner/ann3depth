@@ -12,8 +12,8 @@ def generate_network(network, dataset):
     return network(dataset[0].img.shape, dataset[0].depth.shape)
 
 
-def train_network(network, dataset, epochs):
-    network(dataset)
+def train_network(network, dataset, epochs, batchsize):
+    network(dataset, epochs, batchsize)
 
 
 def browse_data(dataset):
@@ -31,25 +31,32 @@ def browse_results(dataset):
 
 
 def main(browse=False, show_results=False):
-    dataset = data.training(dataset=['make3d1', 'make3d2'], samples=20)
-
-    network = generate_network(networks.DepthMapNetwork, dataset)
-
-    training = threading.Thread(target=train_network,
-                                args=(network, dataset, 1))
-    training.start()
+    samples = 80
+    datasets = ['make3d1', 'make3d2']
+    print(f'Loading {samples} samples from {datasets}.')
+    dataset = data.training(dataset=datasets, samples=samples)
 
     # Open data browser if requested
     if browse:
-        browse_data(dataset)
-        if show_results:
-            plt.show(False)
+        print('Opening databrowser for inputs (only first 20 samples)')
+        browse_data(dataset[:20].copy())
+        plt.show(False)
 
+    network = generate_network(networks.DepthMapNetwork, dataset)
+
+    epochs = 5
+    batchsize = 32
+    training = threading.Thread(target=train_network,
+                                args=(network, dataset, epochs, batchsize))
+    print(f'Beginning training of {epochs} epochs, batchsize: {batchsize}.')
+    training.start()
     training.join()
+    print('Training done.')
 
     # Open results browser if requested
     if show_results:
-        browse_results(dataset)
+        print('Opening databrowser for results (only first 20 samples)')
+        browse_results(dataset[:20])
         plt.show(True)
     elif browse:
         plt.show(True)

@@ -2,6 +2,7 @@ import glob
 import os
 import random
 
+import numpy as np
 import scipy.misc as smisc
 
 
@@ -47,6 +48,31 @@ def __get_files(subdir, dataset):
             images += glob.glob(os.path.join('data', subdir, ds, '*-image.png'))
 
     return list(zip(images, depths))
+
+
+def as_matrix_batches(dataset, size=32):
+    """A generator which returns size samples from dataset per call.
+
+    When not enough samples for a full batch are left, the iterator stops.
+
+    Args:
+        dataset: The dataset to process (list of Samples).
+        size: The number of items per batch.
+
+    Returns:
+        (input, target)
+        With input and target being numpy arrays fitting into tensorflow
+        feed dictionaries.
+    """
+    data = dataset.copy()
+    random.shuffle(data)
+    index = 0
+    while index + size < len(data) + size:
+        yield (
+            np.array([d.img for d in data[index:index + size]]),
+            np.array([d.depth for d in data[index:index + size]])
+        )
+        index += size
 
 
 def __sample(sample_list, samples):
@@ -143,3 +169,11 @@ def load(*, samples='all', dataset='all'):
     """
     return (training(samples=samples, dataset=dataset),
             test(samples=samples, dataset=dataset))
+
+
+if __name__ == '__main__':
+    data = training(dataset='nyu', samples=5)
+    print(data[0])
+    for batch in as_matrix_batches(data, 2):
+        print(batch[0].shape)
+        print(batch[1].shape)
