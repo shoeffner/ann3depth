@@ -1,5 +1,6 @@
 import itertools
 import os
+import time
 
 import tensorflow as tf
 import numpy as np
@@ -57,7 +58,6 @@ class DepthMapNetwork:
             self.saver = tf.train.Saver()
 
     def __call__(self, dataset, epochs=100, batchsize=32):
-        import time
         start = time.time()
         with tf.Session(graph=self.graph) as s:
             s.run(tf.global_variables_initializer())
@@ -81,4 +81,4 @@ class DepthMapNetwork:
                              self.target: np.array([d.depth for d in dataset])})
 
         for i, result in enumerate(results):
-            dataset[i].result = result.squeeze() * 255
+            dataset[i].result = result.squeeze()
