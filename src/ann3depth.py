@@ -44,7 +44,7 @@ def main(browse=False, show_results=False):
 
     network = generate_network(networks.DepthMapNetwork, dataset)
 
-    epochs = 5
+    epochs = 500
     batchsize = 32
     training = threading.Thread(target=train_network,
                                 args=(network, dataset, epochs, batchsize))
