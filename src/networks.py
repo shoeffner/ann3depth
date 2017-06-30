@@ -57,17 +57,23 @@ class DepthMapNetwork:
             self.saver = tf.train.Saver()
 
     def __call__(self, dataset, epochs=100, batchsize=32):
+        import time
+        start = time.time()
         with tf.Session(graph=self.graph) as s:
             s.run(tf.global_variables_initializer())
 
             for epoch in range(1, 1 + epochs):
+                epoch_start = time.time()
                 print(f'Epoch: {epoch}')
 
                 for b_in, b_out in data.as_matrix_batches(dataset, batchsize):
                     s.run(self.optimizer,
                           {self.input: b_in, self.target: b_out})
 
+                print(f'Elapsed time: {time.time() - start}',
+                      f'Epoch time: {time.time() - epoch_start}')
                 if not epoch % 10:
+                    print('Saving')
                     self.saver.save(s, str(self.ckpt_path))
 
             results = s.run(self.output,
