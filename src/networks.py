@@ -35,17 +35,22 @@ class DepthMapNetwork:
             steps_h, steps_v = map(lambda x: x[0] // x[1],
                                    zip(input_shape, output_shape))
             conv = resize
-            for i in range(min(steps_h, steps_v) // 2 + 2):
+            i_boundary = min(steps_h, steps_v) // 2 + 2
+            for i in range(i_boundary):
                 conv = tf.layers.conv2d(conv, 1, 3,
                                         strides=(1 + i % 2, 2 - i % 2),
-                                        padding='same', activation=tf.nn.relu)
-            conv.activation = tf.nn.sigmoid
+                                        padding='same',
+                                        activation=(tf.nn.relu
+                                                    if i != i_boundary - 1 else
+                                                    tf.nn.sigmoid)
+                                        )
+            squeeze = tf.squeeze(conv)
 
-            self.output = tf.squeeze(conv)
+            self.output = squeeze * 255
 
             loss = tf.reduce_sum(
                 tf.squared_difference(self.output,
-                                      tf.cast(self.target, tf.float32) / 255)
+                                      tf.cast(self.target, tf.float32))
             )
             self.optimizer = tf.train.AdamOptimizer().minimize(loss)
 
@@ -68,6 +73,6 @@ class DepthMapNetwork:
             results = s.run(self.output,
                             {self.input: np.array([d.img for d in dataset]),
                              self.target: np.array([d.depth for d in dataset])})
-        print(results)
+
         for i, result in enumerate(results):
             dataset[i].result = result.squeeze() * 255
