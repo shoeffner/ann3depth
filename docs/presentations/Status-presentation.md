@@ -1,6 +1,6 @@
 % Status report: ANN for live depth estimation from video streams
 % Sebastian Höffner ; Andrea Suckro
-% June 29, 2017
+% June 30, 2017
 
 
 # Reminder: Our Goals
