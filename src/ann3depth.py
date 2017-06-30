@@ -20,18 +20,18 @@ def browse_data(dataset):
     visualize.DataBrowser(dataset,
                           name='Inputs',
                           keys=['img', 'depth'],
-                          cmaps={'depth': 'jet'})
+                          cmaps={'depth': 'gray'})
 
 
 def browse_results(dataset):
     visualize.DataBrowser(dataset,
                           name='Results',
                           keys=['img', 'depth', 'result'],
-                          cmaps={'depth': 'jet', 'result': 'gray'})
+                          cmaps={'depth': 'gray', 'result': 'gray'})
 
 
 def main(browse=False, show_results=False):
-    samples = 80
+    samples = 'all'
     datasets = ['make3d1', 'make3d2']
     print(f'Loading {samples} samples from {datasets}.')
     dataset = data.training(dataset=datasets, samples=samples)
@@ -39,7 +39,7 @@ def main(browse=False, show_results=False):
     # Open data browser if requested
     if browse:
         print('Opening databrowser for inputs (only first 20 samples)')
-        browse_data(dataset[:20].copy())
+        browse_data(dataset[:30].copy())
         plt.show(False)
 
     network = generate_network(networks.DepthMapNetwork, dataset)
@@ -56,7 +56,7 @@ def main(browse=False, show_results=False):
     # Open results browser if requested
     if show_results:
         print('Opening databrowser for results (only first 20 samples)')
-        browse_results(dataset[:20])
+        browse_results(dataset[:30])
         plt.show(True)
     elif browse:
         plt.show(True)
