@@ -12,8 +12,8 @@ class Sample:
     def __init__(self, img_path, depth_path):
         self.name = os.path.splitext(os.path.basename(depth_path))[0][:-6]
         self.dataset = os.path.basename(os.path.dirname(depth_path))
-        self.img = smisc.imread(img_path)
-        self.depth = smisc.imread(depth_path)
+        self.img = smisc.imread(img_path).astype(np.float32) / 255
+        self.depth = smisc.imread(depth_path).astype(np.float32) / 255
 
     def __str__(self):
         return '\n  '.join(

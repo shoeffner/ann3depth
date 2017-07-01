@@ -16,28 +16,28 @@ class DepthMapNetwork:
 
         self.graph = tf.Graph()
         with self.graph.as_default():
-            self.input = tf.placeholder(tf.uint8,
+            self.input = tf.placeholder(tf.float32,
                                         shape=(None, ) + input_shape)
-            self.target = tf.placeholder(tf.uint8,
+            self.target = tf.placeholder(tf.float32,
                                          shape=(None, ) + output_shape)
             # Grayscale
-            cast = tf.cast(self.input, tf.float32) / 255
-            gray = tf.image.rgb_to_grayscale(cast)
+            gray = tf.image.rgb_to_grayscale(self.input)
 
-            # Scale to nearest multiple of output size
+            # Scale to nearest multiple of target size
             resize = tf.image.resize_images(gray,
                                             tuple(itertools.starmap(
                                                 lambda x, y: x // y * y,
                                                 zip(input_shape, output_shape))
-                                                ))
+                                            ))
 
-            # convolve to output size, alternating between horizontal and
+            # Convolve to output size, alternating between horizontal and
             # vertical
             steps_h, steps_v = map(lambda x: x[0] // x[1],
                                    zip(input_shape, output_shape))
             conv = resize
             i_boundary = min(steps_h, steps_v) // 2 + 2
             for i in range(i_boundary):
+                # Last layer is sigmoid, others relu
                 conv = tf.layers.conv2d(conv, 1, 3,
                                         strides=(1 + i % 2, 2 - i % 2),
                                         padding='same',
@@ -45,13 +45,10 @@ class DepthMapNetwork:
                                                     if i != i_boundary - 1 else
                                                     tf.nn.sigmoid)
                                         )
-            squeeze = tf.squeeze(conv)
+            self.output = tf.squeeze(conv)
 
-            self.output = squeeze * 255
-
-            loss = tf.reduce_sum(
-                tf.squared_difference(self.output,
-                                      tf.cast(self.target, tf.float32))
+            loss = tf.reduce_mean(
+                tf.squared_difference(self.output, self.target)
             )
             self.optimizer = tf.train.AdamOptimizer().minimize(loss)
 
@@ -80,5 +77,10 @@ class DepthMapNetwork:
                             {self.input: np.array([d.img for d in dataset]),
                              self.target: np.array([d.depth for d in dataset])})
 
+            print('Saving')
+            self.saver.save(s, str(self.ckpt_path))
+
         for i, result in enumerate(results):
             dataset[i].result = result.squeeze()
+            if i < 10:
+                print(result.min(), result.max())

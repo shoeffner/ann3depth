@@ -2,7 +2,6 @@ import itertools
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib import image
-from mpl_toolkits.mplot3d import Axes3D
 
 
 class DataBrowser:
