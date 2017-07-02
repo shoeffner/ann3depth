@@ -1,11 +1,11 @@
 import argparse
+import threading
 
 from matplotlib import pyplot as plt
 
 import data
 import visualize
 import networks
-import threading
 
 
 def generate_network(network, dataset):
