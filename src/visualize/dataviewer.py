@@ -1,4 +1,5 @@
-import itertools
+from itertools import cycle
+
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib import image
@@ -11,6 +12,16 @@ class DataBrowser:
                  keys=['img', 'depth'],
                  cmaps={'depth': 'jet'},
                  name=None):
+        """Create a new DataBrowser.
+
+        Args:
+            dataset (List): List of samples, each sample can either be a
+                List or Tuple containing in order of or object instances
+                with attributes matching the values of the `keys` arg.
+            rows (int): Number of rows to display.
+            cmaps (Dict): Dict specifying colormaps for specific keys.
+            name (str): Databrowser name.
+        """
         self.dataset = dataset
         self.rows = rows
         self.keys = keys
@@ -45,16 +56,18 @@ class DataBrowser:
 
     def update_axes(self):
         first = self.current
-        for axes, img, key in zip(self.axes, self.images,
-                                  itertools.cycle(self.keys)):
+        for axes, img, (col, key) in zip(self.axes, self.images,
+                                         cycle(enumerate(self.keys))):
             sample = self.dataset[self.current]
             if hasattr(sample, key) and getattr(sample, key) is not None:
-                data = getattr(sample, key)
-                img.set_data(data)
-                axes.set_xlim([0, data.shape[1]])
-                axes.set_ylim([data.shape[0], 0])
+                data = np.squeeze(getattr(sample, key))
+            elif isinstance(sample, (list, tuple)) and len(sample) > col:
+                data = np.squeeze(sample[col])
             else:
-                img.set_data(np.array([[1]]))
+                data = np.array([[1]])
+            img.set_data(data)
+            axes.set_xlim([0, data.shape[1]])
+            axes.set_ylim([data.shape[0], 0])
 
             if key == self.keys[-1]:
                 self.current = (self.current + 1) % len(self.dataset)
