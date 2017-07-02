@@ -1,1 +1,1 @@
-from .dataviewer import DataBrowser
+from .dataviewer import Dataviewer

@@ -17,17 +17,17 @@ def train_network(network, dataset, epochs, batchsize):
 
 
 def browse_data(dataset):
-    visualize.DataBrowser(dataset,
-                          name='Inputs',
-                          keys=['img', 'depth'],
-                          cmaps={'depth': 'gray'})
+    visualize.Dataviewer(dataset,
+                         name='Inputs',
+                         keys=['img', 'depth'],
+                         cmaps={'depth': 'gray'})
 
 
 def browse_results(dataset):
-    visualize.DataBrowser(dataset,
-                          name='Results',
-                          keys=['img', 'depth', 'result'],
-                          cmaps={'depth': 'gray', 'result': 'gray'})
+    visualize.Dataviewer(dataset,
+                         name='Results',
+                         keys=['img', 'depth', 'result'],
+                         cmaps={'depth': 'gray', 'result': 'gray'})
 
 
 def main(browse=False, show_results=False):
@@ -38,7 +38,7 @@ def main(browse=False, show_results=False):
 
     # Open data browser if requested
     if browse:
-        print('Opening databrowser for inputs (only first 20 samples)')
+        print('Opening dataviewer for inputs (only first 20 samples)')
         browse_data(dataset[:30].copy())
         plt.show(False)
 
@@ -55,7 +55,7 @@ def main(browse=False, show_results=False):
 
     # Open results browser if requested
     if show_results:
-        print('Opening databrowser for results (only first 20 samples)')
+        print('Opening dataviewer for results (only first 20 samples)')
         browse_results(dataset[:30])
         plt.show(True)
     elif browse:

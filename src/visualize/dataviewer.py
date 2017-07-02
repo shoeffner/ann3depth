@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 from matplotlib import image
 
 
-class DataBrowser:
+class Dataviewer:
 
     def __init__(self, dataset, *,
                  rows=2,
@@ -94,5 +94,5 @@ class DataBrowser:
 if __name__ == '__main__':
     import data
 
-    DataBrowser(data.mixed(samples=16))
+    Dataviewer(data.mixed(samples=16))
     plt.show()
