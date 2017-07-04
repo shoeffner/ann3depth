@@ -10,7 +10,7 @@ import data
 
 class DepthMapNetwork:
 
-    def __init__(self, input_shape, output_shape):
+    def __init__(self, input_shape, output_shape, learning_rate=0.3):
         self.ckpt_path = os.path.join('.', os.environ['CKPT_DIR'],
                                       '{}'.format(self.__class__.__name__))
 
@@ -47,10 +47,13 @@ class DepthMapNetwork:
                                         )
             self.output = tf.squeeze(conv)
 
-            loss = tf.reduce_mean(
+            self.loss = tf.reduce_sum(
                 tf.squared_difference(self.output, self.target)
             )
-            self.optimizer = tf.train.AdamOptimizer().minimize(loss)
+            self.optimizer = tf.train.AdamOptimizer(
+                                learning_rate=learning_rate,
+                                epsilon=1.0
+                             ).minimize(self.loss)
 
             self.saver = tf.train.Saver()
 
@@ -64,8 +67,8 @@ class DepthMapNetwork:
                 print(f'Epoch: {epoch}')
 
                 for b_in, b_out in data.as_matrix_batches(dataset, batchsize):
-                    s.run(self.optimizer,
-                          {self.input: b_in, self.target: b_out})
+                    _, loss = s.run([self.optimizer, self.loss],
+                                    {self.input: b_in, self.target: b_out})
 
                 print(f'Elapsed time: {time.time() - start}',
                       f'Epoch time: {time.time() - epoch_start}')
