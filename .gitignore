@@ -1,6 +1,7 @@
 /build/*
 /checkpoints/*
 /data/*
+/tb_logs/*
 
 __pycache__
 *.pdf

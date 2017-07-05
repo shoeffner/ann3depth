@@ -10,16 +10,18 @@ import data
 
 class DepthMapNetwork:
 
-    def __init__(self, input_shape, output_shape, learning_rate=0.3):
+    def __init__(self, input_shape, output_shape, learning_rate=0.001):
         self.ckpt_path = os.path.join('.', os.environ['CKPT_DIR'],
                                       '{}'.format(self.__class__.__name__))
 
         self.graph = tf.Graph()
         with self.graph.as_default():
             self.input = tf.placeholder(tf.float32,
-                                        shape=(None, ) + input_shape)
+                                        shape=(None, ) + input_shape,
+                                        name='input')
             self.target = tf.placeholder(tf.float32,
-                                         shape=(None, ) + output_shape)
+                                         shape=(None, ) + output_shape,
+                                         name='target')
             # Grayscale
             gray = tf.image.rgb_to_grayscale(self.input)
 
@@ -34,16 +36,16 @@ class DepthMapNetwork:
             # vertical
             steps_h, steps_v = map(lambda x: x[0] // x[1],
                                    zip(input_shape, output_shape))
-            conv = resize
             i_boundary = min(steps_h, steps_v) // 2 + 2
             for i in range(i_boundary):
                 # Last layer is sigmoid, others relu
-                conv = tf.layers.conv2d(conv, 1, 3,
+                conv = tf.layers.conv2d(conv if i > 0 else resize, 1, 3,
                                         strides=(1 + i % 2, 2 - i % 2),
                                         padding='same',
                                         activation=(tf.nn.relu
                                                     if i != i_boundary - 1 else
-                                                    tf.nn.sigmoid)
+                                                    tf.nn.sigmoid),
+                                        name=f'Conv{i}'
                                         )
             self.output = tf.squeeze(conv)
 
@@ -56,6 +58,9 @@ class DepthMapNetwork:
                              ).minimize(self.loss)
 
             self.saver = tf.train.Saver()
+        self.tb_log = tf.summary.FileWriter(os.path.join('.',
+                                                         os.environ['TB_DIR']),
+                                            self.graph)
 
     def __call__(self, dataset, epochs=100, batchsize=32):
         start = time.time()

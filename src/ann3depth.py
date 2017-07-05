@@ -1,4 +1,5 @@
 import argparse
+import os
 import threading
 
 from matplotlib import pyplot as plt
@@ -62,10 +63,19 @@ def main(browse=False, show_results=False):
         plt.show(True)
 
 
+def ensure_envs():
+    if 'CKPT_DIR' not in os.environ:  # Checkpoint directory
+        os.environ['CKPT_DIR'] = 'checkpoints'
+    if 'TB_DIR' not in os.environ:  # TensorBoard directory
+        os.environ['TB_DIR'] = 'tb_logs'
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', action='store_true', help='Enable data viewer')
     parser.add_argument('-r', action='store_true', help='Enable result viewer')
     args = parser.parse_args()
+
+    ensure_envs()
 
     main(browse=args.d, show_results=args.r)

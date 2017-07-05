@@ -1,6 +1,7 @@
 OUT_DIR := build
 DATA_DIR := data
 CKPT_DIR := checkpoints
+TB_DIR := tb_logs
 
 # Check if download is wanted, and if so, set dataset names
 # see http://stackoverflow.com/a/14061796/3004221
@@ -19,11 +20,11 @@ endif
 # run
 .PHONY: run
 run: data
-	TF_CPP_MIN_LOG_LEVEL=2 CKPT_DIR=${CKPT_DIR} python3 src/ann3depth.py
+	TF_CPP_MIN_LOG_LEVEL=2 CKPT_DIR=${CKPT_DIR} TB_DIR=${TB_DIR} python3 src/ann3depth.py
 
 .PHONY: verbose
 verbose: data
-	TF_CPP_MIN_LOG_LEVEL=2 CKPT_DIR=${CKPT_DIR} python3 src/ann3depth.py -d -r
+	TF_CPP_MIN_LOG_LEVEL=2 CKPT_DIR=${CKPT_DIR} TB_DIR=${TB_DIR} python3 src/ann3depth.py -d -r
 
 # inspect samples
 .PHONY: browse
@@ -65,6 +66,10 @@ smart: ${OUT_DIR}
 		-o ${OUT_DIR}/anndepth_assh_smart.pdf \
 		docs/SMART-presentation.md \
 		docs/SMART-presentation.yaml
+
+.PHONY: tb
+tb:
+	tensorboard --logdir=${TB_DIR}
 
 .PHONY: install
 install: requirements.txt
