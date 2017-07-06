@@ -2,6 +2,8 @@ import itertools
 import os
 import time
 
+from datetime import datetime
+
 import tensorflow as tf
 import numpy as np
 
@@ -39,11 +41,13 @@ class DepthMapNetwork:
             i_boundary = min(steps_h, steps_v) // 2 + 2
             for i in range(i_boundary):
                 # Last layer is sigmoid, others relu
-                conv = tf.layers.conv2d(conv if i > 0 else resize, 1, 3,
+                last = i != i_boundary
+                conv = tf.layers.conv2d(conv if i > 0 else resize,
+                                        1 if last else 32, 3,
                                         strides=(1 + i % 2, 2 - i % 2),
                                         padding='same',
                                         activation=(tf.nn.relu
-                                                    if i != i_boundary - 1 else
+                                                    if last else
                                                     tf.nn.sigmoid),
                                         name=f'Conv{i}'
                                         )
@@ -58,9 +62,11 @@ class DepthMapNetwork:
                              ).minimize(self.loss)
 
             self.saver = tf.train.Saver()
-        self.tb_log = tf.summary.FileWriter(os.path.join('.',
-                                                         os.environ['TB_DIR']),
-                                            self.graph)
+        self.tb_log = tf.summary.FileWriter(
+            os.path.join(
+                '.', os.environ['TB_DIR'],
+                datetime.now().isoformat()),
+            self.graph)
 
     def __call__(self, dataset, epochs=100, batchsize=32):
         start = time.time()
