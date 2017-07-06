@@ -81,8 +81,8 @@ class DepthMapNetwork:
                     _, loss = s.run([self.optimizer, self.loss],
                                     {self.input: b_in, self.target: b_out})
 
-                print(f'Elapsed time: {time.time() - start}',
-                      f'Epoch time: {time.time() - epoch_start}')
+                print(f'Elapsed time: {time.time() - start:.3f}',
+                      f'Epoch time: {time.time() - epoch_start:.3f}')
                 if not epoch % 10:
                     print('Saving')
                     self.saver.save(s, str(self.ckpt_path))
