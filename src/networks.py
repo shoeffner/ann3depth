@@ -41,7 +41,7 @@ class DepthMapNetwork:
             i_boundary = min(steps_h, steps_v) // 2 + 2
             for i in range(i_boundary):
                 # Last layer is sigmoid, others relu
-                last = i != i_boundary
+                last = i == i_boundary - 1
                 conv = tf.layers.conv2d(conv if i > 0 else resize,
                                         1 if last else 32, 3,
                                         strides=(1 + i % 2, 2 - i % 2),
