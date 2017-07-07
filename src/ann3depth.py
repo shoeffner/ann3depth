@@ -30,8 +30,9 @@ def browse_results(dataset):
                          cmaps={'depth': 'gray', 'result': 'gray'})
 
 
-def main(browse=False, show_results=False):
-    samples = 'all'
+def main(browse=False, show_results=True):
+    #samples = 'all'
+    samples = 96
     datasets = ['make3d1', 'make3d2']
     print(f'Loading {samples} samples from {datasets}.')
     dataset = data.training(dataset=datasets, samples=samples)
@@ -42,7 +43,7 @@ def main(browse=False, show_results=False):
         browse_data(dataset[:30].copy())
         plt.show(False)
 
-    network = generate_network(networks.DepthMapNetwork, dataset)
+    network = generate_network(networks.DepthMapNetworkV2, dataset)
 
     epochs = 500
     batchsize = 32
