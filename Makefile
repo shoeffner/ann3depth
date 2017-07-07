@@ -3,6 +3,15 @@ DATA_DIR := data
 CKPT_DIR := checkpoints
 TB_DIR := tb_logs
 
+NET ?= DownsampleNetwork
+EPOCHS ?= 500
+BATCHSIZE ?= 32
+DATASETS ?= make3d1 make3d2
+
+SCRIPT := python3 src/ann3depth.py
+COMMON_PARAMETERS := --ckptdir=${CKPT_DIR} --tbdir=${TB_DIR} --network=${NET}
+TRAIN_PARAMETERS := --epochs=${EPOCHS} --batchsize=${BATCHSIZE}
+
 # Check if download is wanted, and if so, set dataset names
 # see http://stackoverflow.com/a/14061796/3004221
 ifeq (download,$(firstword $(MAKECMDGOALS)))
@@ -17,14 +26,21 @@ ifeq (preprocess,$(firstword $(MAKECMDGOALS)))
 endif
 
 
-# run
-.PHONY: run
-run: data
-	TF_CPP_MIN_LOG_LEVEL=2 CKPT_DIR=${CKPT_DIR} TB_DIR=${TB_DIR} python3 src/ann3depth.py
+.PHONY: inspect
+inspect: data
+	${SCRIPT} ${COMMON_PARAMETERS} ${DATASETS}
 
-.PHONY: verbose
-verbose: data
-	TF_CPP_MIN_LOG_LEVEL=2 CKPT_DIR=${CKPT_DIR} TB_DIR=${TB_DIR} python3 src/ann3depth.py -d -r
+.PHONY: train
+train: data
+	${SCRIPT} --train ${COMMON_PARAMETERS} ${TRAIN_PARAMETERS} ${DATASETS}
+
+.PHONY: continue
+continue: data
+	${SCRIPT} --train --cont ${COMMON_PARAMETERS} ${TRAIN_PARAMETERS} ${DATASETS}
+
+.PHONY: help
+help:
+	${SCRIPT} --help
 
 # inspect samples
 .PHONY: browse
@@ -81,5 +97,5 @@ ${OUT_DIR}:
 ${DATA_DIR}:
 	@mkdir -p ${DATA_DIR}
 
-${CKPT_DIR}:
-	@mkdir -p ${CKPT_DIR}
+clean_temp:
+	rm -rf ${CKPT_DIR} ${TB_DIR}
