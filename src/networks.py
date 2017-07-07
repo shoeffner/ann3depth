@@ -46,9 +46,9 @@ class DepthMapNetwork:
                                         1 if last else 32, 3,
                                         strides=(1 + i % 2, 2 - i % 2),
                                         padding='same',
-                                        activation=(tf.nn.relu
+                                        activation=(tf.nn.sigmoid
                                                     if last else
-                                                    tf.nn.sigmoid),
+                                                    tf.nn.relu),
                                         name=f'Conv{i}'
                                         )
             self.output = tf.squeeze(conv)
@@ -78,18 +78,15 @@ class DepthMapNetwork:
                 print(f'Epoch: {epoch}')
 
                 for b_in, b_out in data.as_matrix_batches(dataset, batchsize):
-                    _, loss = s.run([self.optimizer, self.loss],
-                                    {self.input: b_in, self.target: b_out})
+                    _, loss, results = s.run(
+                        [self.optimizer, self.loss, self.output],
+                        {self.input: b_in, self.target: b_out})
 
                 print(f'Elapsed time: {time.time() - start:.3f}',
                       f'Epoch time: {time.time() - epoch_start:.3f}')
                 if not epoch % 10:
                     print('Saving')
                     self.saver.save(s, str(self.ckpt_path))
-
-            results = s.run(self.output,
-                            {self.input: np.array([d.img for d in dataset]),
-                             self.target: np.array([d.depth for d in dataset])})
 
             print('Saving')
             self.saver.save(s, str(self.ckpt_path))
