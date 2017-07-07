@@ -46,6 +46,7 @@ class Dataviewer:
         self.keycb = self.figure.canvas.mpl_connect(
                 'key_press_event',
                 lambda event: self.__key_press_event(event))
+        plt.show()
 
     def show_next(self):
         self.update_axes()
