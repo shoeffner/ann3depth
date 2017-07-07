@@ -1,81 +1,63 @@
 import argparse
-import os
-import threading
-
-from matplotlib import pyplot as plt
 
 import data
-import visualize
 import networks
 
 
-def generate_network(network, dataset):
-    return network(dataset[0].img.shape, dataset[0].depth.shape)
+def test_network(*, network, datasets, samples, checkpoints,
+                 tensorboard, **unused_catch_kwargs):
+    dataset = data.test(dataset=datasets, samples=samples)
+    network = network(dataset[0].img.shape, dataset[0].depth.shape,
+                      ckptdir=checkpoints, tbdir=tensorboard, cont=True)
+    network.test(dataset)
 
-
-def train_network(network, dataset, epochs, batchsize):
-    network(dataset, epochs, batchsize)
-
-
-def browse_data(dataset):
-    visualize.Dataviewer(dataset,
-                         name='Inputs',
-                         keys=['img', 'depth'],
-                         cmaps={'depth': 'gray'})
-
-
-def browse_results(dataset):
-    visualize.Dataviewer(dataset,
-                         name='Results',
+    import visualize
+    visualize.Dataviewer(dataset, name='Results',
                          keys=['img', 'depth', 'result'],
                          cmaps={'depth': 'gray', 'result': 'gray'})
 
 
-def main(browse=False, show_results=False):
-    samples = 'all'
-    datasets = ['make3d1', 'make3d2']
-    print(f'Loading {samples} samples from {datasets}.')
-    dataset = data.training(dataset=datasets, samples=samples)
-
-    # Open data browser if requested
-    if browse:
-        print('Opening dataviewer for inputs (only first 20 samples)')
-        browse_data(dataset[:30].copy())
-        plt.show(False)
-
-    network = generate_network(networks.DepthMapNetwork, dataset)
-
-    epochs = 500
-    batchsize = 32
-    training = threading.Thread(target=train_network,
-                                args=(network, dataset, epochs, batchsize))
-    print(f'Beginning training of {epochs} epochs, batchsize: {batchsize}.')
-    training.start()
-    training.join()
-    print('Training done.')
-
-    # Open results browser if requested
-    if show_results:
-        print('Opening dataviewer for results (only first 20 samples)')
-        browse_results(dataset[:30])
-        plt.show(True)
-    elif browse:
-        plt.show(True)
+def train_network(*, network, epochs, batchsize, datasets, samples,
+                  checkpoints, tensorboard, cont, **unused_catch_kwargs):
+    dataset_train, dataset_test = data.load(dataset=datasets, samples=samples)
+    network = network(dataset_train[0].img.shape, dataset_train[0].depth.shape,
+                      ckptdir=checkpoints, tbdir=tensorboard, cont=cont)
+    network.train(dataset_train, dataset_test, epochs, batchsize)
 
 
-def ensure_envs():
-    if 'CKPT_DIR' not in os.environ:  # Checkpoint directory
-        os.environ['CKPT_DIR'] = 'checkpoints'
-    if 'TB_DIR' not in os.environ:  # TensorBoard directory
-        os.environ['TB_DIR'] = 'tb_logs'
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('datasets', nargs='*',
+                        default=['make3d1', 'make3d2'],
+                        help='The datasets to use.')
+    parser.add_argument('--samples', '-s', default='all',
+                        help='Number of samples from dataset.')
+    parser.add_argument('--train', '-t', action='store_const',
+                        const=train_network, default=test_network,
+                        help='If provided, the network is trained.')
+    parser.add_argument('--network', '-n', default='DownsampleNetwork',
+                        help='Enter a network name from networks.py.')
+    parser.add_argument('--epochs', '-e', default=500, help='Number of epochs')
+    parser.add_argument('--batchsize', '-b', default=32, help='Batchsize')
+    parser.add_argument('--cont', '-c', action='store_true',
+                        help='Continue from checkpoint.')
+    parser.add_argument('--ckptdir', '-p', default='checkpoints',
+                        help='Checkpoint directory')
+    parser.add_argument('--tbdir', '-l', default='tb_logs',
+                        help='Tensorboard directory')
+    return parser.parse_args()
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-d', action='store_true', help='Enable data viewer')
-    parser.add_argument('-r', action='store_true', help='Enable result viewer')
-    args = parser.parse_args()
+    args = parse_args()
+    print(args)
 
-    ensure_envs()
-
-    main(browse=args.d, show_results=args.r)
+    args.train(network=getattr(networks, args.network),
+               epochs=args.epochs,
+               batchsize=args.batchsize,
+               datasets=args.datasets,
+               samples=args.samples,
+               checkpoints=args.ckptdir,
+               tensorboard=args.tbdir,
+               cont=args.cont or (args.train == test_network)
+               )
