@@ -48,15 +48,22 @@ def parse_args():
     return parser.parse_args()
 
 
+def maybe_int(v):
+    try:
+        return int(v)
+    except ValueError:
+        return v
+
+
 if __name__ == '__main__':
     args = parse_args()
     print(args)
 
     args.train(network=getattr(networks, args.network),
-               epochs=args.epochs,
-               batchsize=args.batchsize,
+               epochs=maybe_int(args.epochs),
+               batchsize=maybe_int(args.batchsize),
                datasets=args.datasets,
-               samples=args.samples,
+               samples=maybe_int(args.samples),
                checkpoints=args.ckptdir,
                tensorboard=args.tbdir,
                cont=args.cont or (args.train == test_network)
