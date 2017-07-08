@@ -31,7 +31,7 @@ LIMIT = None  # Default: None
 
 def include(img):
     """Filter to remove files which are not part of the datasets."""
-    return img[img.index('.') + 1:] not in ['txt']
+    return img[img.index('.') + 1:] not in ['txt', 'db']
 
 
 def __process_make3d1(path_train, path_test):
@@ -45,7 +45,8 @@ def __process_make3d1(path_train, path_test):
     target_path = [path_train, path_test]
 
     if os.listdir(path_train) != [] or os.listdir(path_test) != []:
-        print(f'At least one of the target directories is not empty: {target_path}, aborting preprocessing...')
+        print(
+            f'At least one of the target directories is not empty: {target_path}, aborting preprocessing...')
         return
 
     for dp, ip, tp in zip(depth_path, img_path, target_path):
@@ -86,7 +87,8 @@ def __process_make3d2(path_train, path_test):
     target_path = [path_train, path_test]
 
     if os.listdir(path_train) != [] or os.listdir(path_test) != []:
-        print(f'At least one of the target directories is not empty: {target_path}, aborting preprocessing...')
+        print(
+            f'At least one of the target directories is not empty: {target_path}, aborting preprocessing...')
         return
 
     for dp, ip, tp in zip(depth_path, img_path, target_path):
@@ -125,7 +127,8 @@ def __process_nyu(path_train, path_test):
     path = os.path.join('data', 'nyu', 'unpacked', 'nyu_depth_v2_labeled.mat')
 
     if os.listdir(path_train) != [] or os.listdir(path_test) != []:
-        print(f'At least one of the target directories is not empty: {target_path}, aborting preprocessing...')
+        print(
+            f'At least one of the target directories is not empty: {target_path}, aborting preprocessing...')
         return
 
     c = 0
