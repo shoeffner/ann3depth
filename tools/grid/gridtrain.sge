@@ -1,0 +1,28 @@
+#!/bin/bash
+#$ -N ann3depth_train
+#$ -l mem=4G
+#$ -l cuda=1
+#$ -l cuda_cores=640
+#$ -cwd
+#$ -j y
+#$ -notify
+#$ -V
+#$ -o ./grid_logs/$JOB_ID.out
+
+export CONDAENV=${CONDAENV-asuckro-shoeffner-ann3depth}
+
+echo Current environment variables:
+env
+
+echo Activating conda env:
+source activate $CONDAENV
+conda info --envs | grep \*
+
+echo conda info:
+conda info
+
+echo pip freeze:
+pip freeze
+
+echo Starting training
+CONDAENV=$CONDAENV NET=$NET DATASETS=$DATASETS EPOCHS=$EPOCHS BATCHSIZE=$BATCHSIZE make train

@@ -2,6 +2,7 @@
 /checkpoints/*
 /data/*
 /tb_logs/*
+/grid_logs/*
 
 __pycache__
 *.pdf
