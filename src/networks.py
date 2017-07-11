@@ -33,6 +33,8 @@ class DepthMapNetwork:
                                           'No self.optimizer implemented', 1)
                 self.output = tf.Print(self.input, [''],
                                        'No self.output implemented', 1)
+                self.loss = tf.Print(self.input, [''],
+                                     'No self.loss implemented', 1)
 
                 __init__(self, input_shape, output_shape)
 
@@ -47,16 +49,27 @@ class DepthMapNetwork:
 
         return init
 
+    def __loss(self, dataset_test, session):
+        loss = 0
+        for b_in, b_out in data.as_matrix_batches(dataset_test, 1):
+            loss += session.run(self.loss, {self.input: b_in,
+                                            self.output: b_out})
+        return loss / len(dataset_test)
+
     def test(self, dataset):
         with tf.Session(graph=self.graph) as s:
             s.run(tf.global_variables_initializer())
             self.saver.restore(s, self.ckpt_path)
 
+            total_loss = 0
             for i, (b_in, b_out) in enumerate(data.as_matrix_batches(dataset,
                                                                      1)):
-                dataset[i].result = s.run(self.output,
-                                          {self.input: b_in,
-                                           self.target: b_out})
+                feed_dict = {self.input: b_in, self.target: b_out}
+                dataset[i].result, loss = s.run([self.output, self.loss],
+                                                feed_dict)
+                total_loss += loss
+            total_loss /= len(dataset)
+            print(f'Mean loss is {total_loss}')
 
     def train(self, dataset_train, dataset_test, epochs, batchsize):
         start = time.time()
@@ -69,20 +82,23 @@ class DepthMapNetwork:
                 epoch_start = time.time()
                 print(f'Starting epoch {epoch}')
 
-                for b_in, b_out in data.as_matrix_batches(dataset_test,
+                for b_in, b_out in data.as_matrix_batches(dataset_train,
                                                           batchsize):
                     s.run(self.optimizer,
                           {self.input: b_in, self.target: b_out})
 
+                loss = self.__loss(dataset_test, s)
+
                 print(f'Epoch {epoch} finished',
                       f'Elapsed time: {time.time() - start:.3f}',
-                      f'Epoch time: {time.time() - epoch_start:.3f}')
+                      f'Epoch time: {time.time() - epoch_start:.3f}',
+                      f'\nMean loss: {loss}')
                 if not epoch % 10:
                     print(f'Saving checkpoints after epoch {epoch}')
-                    self.saver.save(s, self.ckpt_path)
+                    self.saver.save(s, self.ckpt_path, global_step=epoch)
 
             print('Saving final checkpoint')
-            self.saver.save(s, self.ckpt_path)
+            self.saver.save(s, self.ckpt_path, global_step=epoch)
 
 
 class DownsampleNetwork(DepthMapNetwork):
@@ -118,7 +134,7 @@ class DownsampleNetwork(DepthMapNetwork):
                                     )
         self.output = tf.squeeze(conv)
 
-        self.loss = tf.reduce_sum(
+        self.loss = tf.reduce_mean(
             tf.squared_difference(self.output, self.target)
         )
         self.optimizer = tf.train.AdamOptimizer(
