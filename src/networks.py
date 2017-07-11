@@ -14,9 +14,11 @@ class DepthMapNetwork:
 
     def setup(__init__):
         def init(self, input_shape, output_shape, *,
-                 ckptdir='checkpoints', tbdir='tb_logs', cont=False):
+                 ckptdir='checkpoints', ckptfreq=50, tbdir='tb_logs',
+                 cont=False):
             self.ckpt_path = str(os.path.join('.', ckptdir,
-                                              '{}'.format(type(self).__name__)))
+                                              f'{type(self).__name__}'))
+            self.ckptfreq = ckptfreq
 
             self.cont = cont
 
@@ -93,7 +95,7 @@ class DepthMapNetwork:
                       f'Elapsed time: {time.time() - start:.3f}',
                       f'Epoch time: {time.time() - epoch_start:.3f}',
                       f'\nMean loss: {loss}')
-                if not epoch % 10:
+                if not epoch % self.ckptfreq:
                     print(f'Saving checkpoints after epoch {epoch}')
                     self.saver.save(s, self.ckpt_path, global_step=epoch)
 

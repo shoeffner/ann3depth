@@ -18,10 +18,12 @@ def test_network(*, network, datasets, samples, checkpoints,
 
 
 def train_network(*, network, epochs, batchsize, datasets, samples,
-                  checkpoints, tensorboard, cont, **unused_catch_kwargs):
+                  checkpoints, ckptfreq, tensorboard, cont,
+                  **unused_catch_kwargs):
     dataset_train, dataset_test = data.load(dataset=datasets, samples=samples)
     network = network(dataset_train[0].img.shape, dataset_train[0].depth.shape,
-                      ckptdir=checkpoints, tbdir=tensorboard, cont=cont)
+                      ckptdir=checkpoints, ckptfreq=ckptfreq,
+                      tbdir=tensorboard, cont=cont)
     network.train(dataset_train, dataset_test, epochs, batchsize)
 
 
@@ -43,6 +45,8 @@ def parse_args():
                         help='Continue from checkpoint.')
     parser.add_argument('--ckptdir', '-p', default='checkpoints',
                         help='Checkpoint directory')
+    parser.add_argument('--ckptfreq', '-f', default=50,
+                        help='Create a checkpoint every N epochs.')
     parser.add_argument('--tbdir', '-l', default='tb_logs',
                         help='Tensorboard directory')
     return parser.parse_args()
@@ -65,6 +69,7 @@ if __name__ == '__main__':
                datasets=args.datasets,
                samples=maybe_int(args.samples),
                checkpoints=args.ckptdir,
+               ckptfreq=maybe_int(args.ckptfreq),
                tensorboard=args.tbdir,
                cont=args.cont or (args.train == test_network)
                )
