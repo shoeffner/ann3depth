@@ -39,13 +39,15 @@ def parse_args():
                         help='If provided, the network is trained.')
     parser.add_argument('--network', '-n', default='DownsampleNetwork',
                         help='Enter a network name from networks.py.')
-    parser.add_argument('--epochs', '-e', default=500, help='Number of epochs')
-    parser.add_argument('--batchsize', '-b', default=32, help='Batchsize')
+    parser.add_argument('--epochs', '-e', default=500, type=int,
+                        help='Number of epochs')
+    parser.add_argument('--batchsize', '-b', default=32, type=int,
+                        help='Batchsize')
     parser.add_argument('--cont', '-c', action='store_true',
                         help='Continue from checkpoint.')
     parser.add_argument('--ckptdir', '-p', default='checkpoints',
                         help='Checkpoint directory')
-    parser.add_argument('--ckptfreq', '-f', default=50,
+    parser.add_argument('--ckptfreq', '-f', default=50, type=int,
                         help='Create a checkpoint every N epochs.')
     parser.add_argument('--tbdir', '-l', default='tb_logs',
                         help='Tensorboard directory')
@@ -64,12 +66,12 @@ if __name__ == '__main__':
     print(args)
 
     args.train(network=getattr(networks, args.network),
-               epochs=maybe_int(args.epochs),
-               batchsize=maybe_int(args.batchsize),
+               epochs=args.epochs,
+               batchsize=args.batchsize,
                datasets=args.datasets,
                samples=maybe_int(args.samples),
                checkpoints=args.ckptdir,
-               ckptfreq=maybe_int(args.ckptfreq),
+               ckptfreq=args.ckptfreq,
                tensorboard=args.tbdir,
                cont=args.cont or (args.train == test_network)
                )
