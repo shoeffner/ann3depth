@@ -10,6 +10,13 @@ import numpy as np
 import data
 
 
+def create_reset_metric(metric, scope='reset_metrics', **metric_args):
+    with tf.variable_scope(scope):
+        metric_op, update_op = metric(**metric_args)
+        reset_op = tf.local_variables_initializer()
+    return metric_op, update_op, reset_op
+
+
 class DepthMapNetwork:
 
     def setup(__init__):
@@ -42,10 +49,26 @@ class DepthMapNetwork:
 
                 __init__(self, input_shape, output_shape)
 
-                self.summary_loss_train = tf.summary.scalar('loss/train',
-                                                            self.loss)
-                self.summary_loss_test = tf.summary.scalar('loss/test',
-                                                           self.loss)
+                (self.epoch_loss,
+                 self.epoch_loss_update,
+                 self.epoch_loss_reset) = create_reset_metric(
+                    tf.contrib.metrics.streaming_mean_squared_error,
+                    'epoch_loss',
+                    predictions=self.output,
+                    labels=self.target)
+                # with tf.variable_scope('epoch_loss'):
+                #     self.epoch_loss, self.epoch_loss_update = (
+                #         tf.contrib.metrics.streaming_mean_squared_error(
+                #             self.output, self.target
+                #         )
+                #     )
+                #     self.epoch_loss_reset = tf.local_variables_initializer()
+
+                with tf.name_scope('loss'):
+                    self.summary_loss_train = tf.summary.scalar('train',
+                                                                self.loss)
+                    self.summary_loss_test = tf.summary.scalar('test',
+                                                               self.epoch_loss)
 
                 self.saver = tf.train.Saver()
 
@@ -61,17 +84,19 @@ class DepthMapNetwork:
     def test(self, dataset):
         with tf.Session(graph=self.graph) as s:
             s.run(tf.global_variables_initializer())
-            self.saver.restore(s, self.ckpt_path)
+            if self.cont:
+                self.saver.restore(s, self.ckpt_path)
 
-            total_loss = 0
-            for i, (b_in, b_out) in enumerate(data.as_matrix_batches(dataset,
-                                                                     1)):
+            s.run(self.epoch_loss_reset)
+            for i, (b_in, b_out) in enumerate(
+                    data.as_matrix_batches(dataset, 1)):
                 feed_dict = {self.input: b_in, self.target: b_out}
-                dataset[i].result, loss = s.run([self.output, self.loss],
+                dataset[i].result, loss = s.run([self.output,
+                                                 self.epoch_loss_update],
                                                 feed_dict)
-                total_loss += loss
-            total_loss /= len(dataset)
-            print(f'Mean loss is {total_loss}')
+            s.run(self.epoch_loss_reset)
+
+            print(f'Mean loss is {loss}')
 
     def train(self, dataset_train, dataset_test, epochs, batchsize):
         start = time.time()
@@ -93,17 +118,21 @@ class DepthMapNetwork:
                                            self.target: b_out})
                     self.tb_log.add_summary(loss, step)
 
-                b_in, b_out = next(data.as_matrix_batches(dataset_test,
-                                                          len(dataset_test)))
-                loss_test, step = s.run([self.summary_loss_test,
-                                         self.step],
-                                        {self.input: b_in,
-                                         self.target: b_out})
+                s.run(self.epoch_loss_reset)
+                for b_in, b_out in data.as_matrix_batches(
+                        dataset_test, batchsize):
+                    loss_test, step, loss = s.run([self.summary_loss_test,
+                                                   self.step,
+                                                   self.epoch_loss_update],
+                                                  {self.input: b_in,
+                                                   self.target: b_out})
+                s.run(self.epoch_loss_reset)
 
                 self.tb_log.add_summary(loss_test, step)
                 print(f'Epoch {epoch} finished',
                       f'Elapsed time: {time.time() - start:.3f}',
-                      f'Epoch time: {time.time() - epoch_start:.3f}')
+                      f'Epoch time: {time.time() - epoch_start:.3f}',
+                      f'Loss {loss}')
                 if not epoch % self.ckptfreq:
                     print(f'Saving checkpoints after epoch {epoch}')
                     self.saver.save(s, self.ckpt_path, global_step=self.step)
@@ -132,7 +161,7 @@ class DownsampleNetwork(DepthMapNetwork):
                                zip(input_shape, output_shape))
         i_boundary = min(steps_h, steps_v) // 2 + 2
         for i in range(i_boundary):
-                # Last layer is sigmoid, others relu
+            # Last layer is sigmoid, others relu
             last = i == i_boundary - 1
             conv = tf.layers.conv2d(conv if i > 0 else resize,
                                     1 if last else 32, 3,
@@ -145,9 +174,7 @@ class DownsampleNetwork(DepthMapNetwork):
                                     )
         self.output = tf.squeeze(conv)
 
-        self.loss = tf.reduce_mean(
-            tf.squared_difference(self.output, self.target)
-        )
+        self.loss = tf.losses.mean_squared_error(self.target, self.output)
         self.optimizer = tf.train.AdamOptimizer(
                             learning_rate=0.001,
                             epsilon=1.0
