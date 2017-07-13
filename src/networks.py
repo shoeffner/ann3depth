@@ -27,6 +27,7 @@ class DepthMapNetwork:
                  cont=False):
             self.ckpt_path = str(os.path.join('.', ckptdir,
                                               f'{type(self).__name__}'))
+            self.ckpt = tf.train.latest_checkpoint(os.path.join('.', ckptdir))
             self.ckptfreq = ckptfreq
 
             self.cont = cont
@@ -80,11 +81,11 @@ class DepthMapNetwork:
         with tf.Session(graph=self.graph) as s:
             s.run(tf.global_variables_initializer())
             if self.cont:
-                self.saver.restore(s, self.ckpt_path)
+                self.saver.restore(s, self.ckpt)
 
             s.run(self.epoch_loss_reset)
             for i, (b_in, b_out) in enumerate(
-                    data.as_matrix_batches(dataset, 1)):
+                    data.as_matrix_batches(dataset, 1, False)):
                 feed_dict = {self.input: b_in, self.target: b_out}
                 dataset[i].result, loss = s.run([self.output,
                                                  self.epoch_loss_update],
@@ -98,7 +99,7 @@ class DepthMapNetwork:
         with tf.Session(graph=self.graph) as s:
             s.run(tf.global_variables_initializer())
             if self.cont:
-                self.saver.restore(s, self.ckpt_path)
+                self.saver.restore(s, self.ckpt)
 
             for epoch in range(1, 1 + epochs):
                 epoch_start = time.time()

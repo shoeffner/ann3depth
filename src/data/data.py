@@ -50,7 +50,7 @@ def __get_files(subdir, dataset):
     return list(zip(images, depths))
 
 
-def as_matrix_batches(dataset, size=32):
+def as_matrix_batches(dataset, size=32, shuffle=True):
     """A generator which returns size samples from dataset per call.
 
     When not enough samples for a full batch are left, the iterator stops.
@@ -58,6 +58,7 @@ def as_matrix_batches(dataset, size=32):
     Args:
         dataset: The dataset to process (list of Samples).
         size: The number of items per batch.
+        shuffle: If True, the dataset is shuffled before sampling occurs.
 
     Returns:
         (input, target)
@@ -65,7 +66,8 @@ def as_matrix_batches(dataset, size=32):
         feed dictionaries.
     """
     data = dataset.copy()
-    random.shuffle(data)
+    if shuffle:
+        random.shuffle(data)
     index = 0
     while index + size < len(data) + size:
         yield (
