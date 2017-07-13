@@ -58,13 +58,6 @@ class DepthMapNetwork:
                     'epoch_loss',
                     predictions=self.output,
                     labels=self.target)
-                # with tf.variable_scope('epoch_loss'):
-                #     self.epoch_loss, self.epoch_loss_update = (
-                #         tf.contrib.metrics.streaming_mean_squared_error(
-                #             self.output, self.target
-                #         )
-                #     )
-                #     self.epoch_loss_reset = tf.local_variables_initializer()
 
                 with tf.name_scope('loss'):
                     self.summary_loss_train = tf.summary.scalar('train',
