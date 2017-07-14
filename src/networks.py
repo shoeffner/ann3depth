@@ -1,5 +1,6 @@
 import itertools
 import os
+import signal
 import time
 
 from datetime import datetime
@@ -100,6 +101,7 @@ class DepthMapNetwork:
             s.run(tf.global_variables_initializer())
             if self.cont:
                 self.saver.restore(s, self.ckpt)
+            self.__register_kill_handlers(s)
 
             for epoch in range(1, 1 + epochs):
                 epoch_start = time.time()
@@ -135,6 +137,16 @@ class DepthMapNetwork:
 
             print('Saving final checkpoint')
             self.saver.save(s, self.ckpt_path, global_step=self.step)
+
+    def __register_kill_handlers(self, session):
+        def handler(signum, frame):
+            print(f'Received signal {signal.Signals(signum).name}, saving...')
+            self.saver.save(session, self.ckpt_path, global_step=self.step)
+            print(f'Saved successfully.')
+        signal.signal(signal.SIGUSR1, handler)
+        print('Registered handler for SIGUSR1')
+        signal.signal(signal.SIGUSR2, handler)
+        print('Registered handler for SIGUSR2')
 
 
 class DownsampleNetwork(DepthMapNetwork):
