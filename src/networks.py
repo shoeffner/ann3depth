@@ -99,11 +99,15 @@ class DepthMapNetwork:
         start = time.time()
         with tf.Session(graph=self.graph) as s:
             s.run(tf.global_variables_initializer())
+            start_epoch = 1
             if self.cont:
                 self.saver.restore(s, self.ckpt)
+                step = s.run(self.step)
+                start_epoch = 1 + step // (len(dataset_test) / batchsize)
             self.__register_kill_handlers(s)
 
-            for epoch in range(1, 1 + epochs):
+            print('Starting at epoch {start_epoch}')
+            for epoch in range(start_epoch, 1 + epochs):
                 epoch_start = time.time()
                 print(f'Starting epoch {epoch}')
 

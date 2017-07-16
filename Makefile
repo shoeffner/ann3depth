@@ -14,10 +14,11 @@ EPOCHS ?= 500
 BATCHSIZE ?= 32
 DATASETS ?= make3d1
 CKPT_FREQ ?= 50
+CONT ?=
 
 SCRIPT := python3 src/ann3depth.py
 COMMON_PARAMETERS := --ckptdir=${CKPT_DIR} --tbdir=${TB_DIR} --network=${NET}
-TRAIN_PARAMETERS := --epochs=${EPOCHS} --batchsize=${BATCHSIZE} --ckptfreq=${CKPT_FREQ}
+TRAIN_PARAMETERS := --epochs=${EPOCHS} --batchsize=${BATCHSIZE} --ckptfreq=${CKPT_FREQ} ${CONT}
 
 # Check if download is wanted, and if so, set dataset names
 # see http://stackoverflow.com/a/14061796/3004221
