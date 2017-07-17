@@ -2,6 +2,7 @@ import itertools
 import logging
 import os
 import signal
+import sys
 import time
 
 from datetime import datetime
@@ -149,6 +150,8 @@ class DepthMapNetwork:
             logger.critical(f'Received signal {signal.Signals(signum).name}')
             self.saver.save(session, self.ckpt_path, global_step=self.step)
             logger.info(f'Saved successfully. Shutting down...')
+            sys.exit('Shut down after receiving signal ' +
+                     f'{signal.Signals(signum).name}')
         signal.signal(signal.SIGUSR1, handler)
         logger.debug('Registered handler for SIGUSR1')
         signal.signal(signal.SIGUSR2, handler)

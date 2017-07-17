@@ -9,11 +9,16 @@
 #$ -V
 #$ -o ./grid_logs/$JOB_ID.out
 
+echo Starting at $(date)
+
 # Use default condaenv if necessary
 export CONDAENV=${CONDAENV-asuckro-shoeffner-ann3depth}
 
 # Resubmit job on SIGUSR1 or SIGUSR2
+touch resub.txt
 function resubmit () {
+    echo "Testing for resubmission"
+    test -f resub.txt || exit 0
     echo "Resubmitting job..."
 	CONDAENV=$CONDAENV NET=$NET BATCHSIZE=$BATCHSIZE EPOCHS=$EPOCHS DATASETS=$DATASETS CKPT_FREQ=$CKPT_FREQ CONT=--cont qsub ./tools/grid/gridtrain.sge
 }
@@ -33,7 +38,6 @@ echo pip freeze:
 pip freeze
 
 echo Starting training
-CONDAENV=$CONDAENV NET=$NET DATASETS=$DATASETS EPOCHS=$EPOCHS BATCHSIZE=$BATCHSIZE CKPT_FREQ=$CKPT_FREQ CONT=$CONT make train
+CONDAENV=$CONDAENV NET=$NET DATASETS=$DATASETS EPOCHS=$EPOCHS BATCHSIZE=$BATCHSIZE CKPT_FREQ=$CKPT_FREQ CONT=$CONT make train && rm resub.txt
 
-# Create no-resubmission anchor
-trap - SIGUSR1 SIGUSR2
+echo Stopping at $(date)
