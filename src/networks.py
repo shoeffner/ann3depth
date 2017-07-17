@@ -1,4 +1,5 @@
 import itertools
+import logging
 import os
 import signal
 import time
@@ -10,6 +11,7 @@ import numpy as np
 
 import data
 
+logger = logging.getLogger('ann3depth')
 
 def create_reset_metric(metric, scope='reset_metrics', **metric_args):
     with tf.variable_scope(scope) as scope:
@@ -93,7 +95,7 @@ class DepthMapNetwork:
                                                 feed_dict)
             s.run(self.epoch_loss_reset)
 
-            print(f'Mean loss is {loss}')
+            logger.info(f'Mean loss is {loss}')
 
     def train(self, dataset_train, dataset_test, epochs, batchsize):
         start = time.time()
@@ -106,10 +108,10 @@ class DepthMapNetwork:
                 start_epoch = 1 + step // (len(dataset_test) / batchsize)
             self.__register_kill_handlers(s)
 
-            print('Starting at epoch {start_epoch}')
+            logger.debug('Starting at epoch {start_epoch}')
             for epoch in range(start_epoch, 1 + epochs):
                 epoch_start = time.time()
-                print(f'Starting epoch {epoch}')
+                logger.info(f'Starting epoch {epoch}')
 
                 for b_in, b_out in data.as_matrix_batches(dataset_train,
                                                           batchsize):
@@ -131,26 +133,26 @@ class DepthMapNetwork:
                 s.run(self.epoch_loss_reset)
 
                 self.tb_log.add_summary(loss_test, step)
-                print(f'Epoch {epoch} finished',
-                      f'Elapsed time: {time.time() - start:.3f}',
-                      f'Epoch time: {time.time() - epoch_start:.3f}',
+                logger.info(f'Epoch {epoch} finished; ' +
+                      f'Elapsed time: {time.time() - start:.3f}; ' +
+                      f'Epoch time: {time.time() - epoch_start:.3f}; ' +
                       f'Loss {loss}')
                 if not epoch % self.ckptfreq:
-                    print(f'Saving checkpoints after epoch {epoch}')
+                    logger.info(f'Saving checkpoints after epoch {epoch}')
                     self.saver.save(s, self.ckpt_path, global_step=self.step)
 
-            print('Saving final checkpoint')
+            logger.info('Saving final checkpoint')
             self.saver.save(s, self.ckpt_path, global_step=self.step)
 
     def __register_kill_handlers(self, session):
         def handler(signum, frame):
-            print(f'Received signal {signal.Signals(signum).name}, saving...')
+            logger.critical(f'Received signal {signal.Signals(signum).name}')
             self.saver.save(session, self.ckpt_path, global_step=self.step)
-            print(f'Saved successfully.')
+            logger.info(f'Saved successfully. Shutting down...')
         signal.signal(signal.SIGUSR1, handler)
-        print('Registered handler for SIGUSR1')
+        logger.debug('Registered handler for SIGUSR1')
         signal.signal(signal.SIGUSR2, handler)
-        print('Registered handler for SIGUSR2')
+        logger.debug('Registered handler for SIGUSR2')
 
 
 class DownsampleNetwork(DepthMapNetwork):

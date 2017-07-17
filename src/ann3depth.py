@@ -1,4 +1,6 @@
 import argparse
+import logging
+import logging.config
 
 import data
 import networks
@@ -62,9 +64,11 @@ def maybe_int(v):
 
 
 if __name__ == '__main__':
-    args = parse_args()
-    print(args)
+    logging.config.fileConfig('logging.ini')
+    logger = logging.getLogger('ann3depth')
 
+    args = parse_args()
+    logger.debug(args)
     args.train(network=getattr(networks, args.network),
                epochs=args.epochs,
                batchsize=args.batchsize,
