@@ -1,6 +1,7 @@
 import argparse
 import logging
 import logging.config
+import signal
 
 import data
 import networks
@@ -69,6 +70,11 @@ if __name__ == '__main__':
 
     args = parse_args()
     logger.debug(args)
+
+    timeout = 5400
+    signal.alarm(timeout)
+    logger.info(f'Killing job in {timeout} seconds.')
+
     args.train(network=getattr(networks, args.network),
                epochs=args.epochs,
                batchsize=args.batchsize,

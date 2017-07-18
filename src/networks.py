@@ -106,10 +106,10 @@ class DepthMapNetwork:
             if self.cont:
                 self.saver.restore(s, self.ckpt)
                 step = s.run(self.step)
-                start_epoch = 1 + step // (len(dataset_test) / batchsize)
+                start_epoch = int(1 + step // (len(dataset_test) / batchsize))
             self.__register_kill_handlers(s)
 
-            logger.debug('Starting at epoch {start_epoch}')
+            logger.debug(f'Starting at epoch {start_epoch}')
             for epoch in range(start_epoch, 1 + epochs):
                 epoch_start = time.time()
                 logger.info(f'Starting epoch {epoch}')
@@ -152,11 +152,9 @@ class DepthMapNetwork:
             logger.info(f'Saved successfully. Shutting down...')
             sys.exit('Shut down after receiving signal ' +
                      f'{signal.Signals(signum).name}')
-        signal.signal(signal.SIGUSR1, handler)
-        logger.debug('Registered handler for SIGUSR1')
-        signal.signal(signal.SIGUSR2, handler)
-        logger.debug('Registered handler for SIGUSR2')
-
+        for s in [signal.SIGUSR1, signal.SIGUSR2, signal.SIGALRM]:
+            signal.signal(s, handler)
+            logger.debug(f'Registered handler for {s.name}')
 
 class DownsampleNetwork(DepthMapNetwork):
 
