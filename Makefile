@@ -56,7 +56,7 @@ conda:
 # Submit a grid training job
 .PHONY: grid
 grid: ${LOG_DIR}
-	CONDAENV=${CONDAENV} NET=${NET} EPOCHS=${EPOCHS} BATCHSIZE=${BATCHSIZE} DATASETS=${DATASETS} CKPT_FREQ=${CKPT_FREQ} qsub ./tools/grid/train.sge
+	CONDAENV=${CONDAENV} NET=${NET} EPOCHS=${EPOCHS} BATCHSIZE=${BATCHSIZE} DATASETS=${DATASETS} CKPT_FREQ=${CKPT_FREQ} CONT=${CONT} qsub ./tools/grid/train.sge
 
 .PHONY: help
 help:
