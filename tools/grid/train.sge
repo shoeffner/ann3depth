@@ -20,9 +20,9 @@ function resubmit () {
     echo "Testing for resubmission"
     test -f resub.txt || exit 0
     echo "Resubmitting job..."
-	CONDAENV=$CONDAENV NET=$NET BATCHSIZE=$BATCHSIZE EPOCHS=$EPOCHS DATASETS=$DATASETS CKPT_FREQ=$CKPT_FREQ CONT=--cont qsub ./tools/grid/gridtrain.sge
+	CONDAENV=$CONDAENV NET=$NET BATCHSIZE=$BATCHSIZE EPOCHS=$EPOCHS DATASETS=$DATASETS CKPT_FREQ=$CKPT_FREQ CONT=--cont qsub ./tools/grid/train.sge
 }
-trap resubmit SIGUSR1 SIGUSR2
+#trap resubmit SIGUSR1 SIGUSR2
 
 echo Current environment variables:
 env
