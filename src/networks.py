@@ -72,12 +72,16 @@ class DepthMapNetwork:
 
                 self.saver = tf.train.Saver()
 
-            self.tb_log = tf.summary.FileWriter(
-                os.path.join(
-                    '.', tbdir,
-                    datetime.now().strftime(
-                        f'%m-%dT%H-%M_{type(self).__name__}')),
-                self.graph)
+            if not self.cont:  # Create new FileWriter path
+                filewriter_path = os.path.join('.', tbdir,
+                                    datetime.now().strftime(
+                                        f'%m-%dT%H-%M_{type(self).__name__}'))
+            else:  # Select old filewriter path
+                directories = sorted(os.listdir(os.path.join('.', tbdir)))
+                directories = [s for s in directories if s[0].isdigit()]
+                filewriter_path = os.path.join('.', tbdir, directories[-1])
+
+            self.tb_log = tf.summary.FileWriter(filewriter_path, self.graph)
 
         return init
 
@@ -106,7 +110,7 @@ class DepthMapNetwork:
             if self.cont:
                 self.saver.restore(s, self.ckpt)
                 step = s.run(self.step)
-                start_epoch = int(1 + step // (len(dataset_test) / batchsize))
+                start_epoch = 1 + int(step / (len(dataset_train) / batchsize))
             self.__register_kill_handlers(s)
 
             logger.debug(f'Starting at epoch {start_epoch}')

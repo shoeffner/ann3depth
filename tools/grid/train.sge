@@ -30,9 +30,12 @@ pip freeze
 echo Starting training
 CONDAENV=$CONDAENV NET=$NET DATASETS=$DATASETS EPOCHS=$EPOCHS BATCHSIZE=$BATCHSIZE CKPT_FREQ=$CKPT_FREQ CONT=$CONT make train
 
-if [ $? -ne 0 ]; then
+returnval=$?
+echo Return code was $returnval
+if [ $returnval -ne 0 ]; then
     echo "Resubmitting job."
     CONDAENV=$CONDAENV NET=$NET BATCHSIZE=$BATCHSIZE EPOCHS=$EPOCHS DATASETS=$DATASETS CKPT_FREQ=$CKPT_FREQ CONT=--cont make grid
+    echo "Resubmitted."
 fi
 
 echo Stopping at $(date)

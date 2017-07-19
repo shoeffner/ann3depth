@@ -71,7 +71,7 @@ if __name__ == '__main__':
     args = parse_args()
     logger.debug(args)
 
-    timeout = 5400
+    timeout = 4200
     signal.alarm(timeout)
     logger.info(f'Killing job in {timeout} seconds.')
 
