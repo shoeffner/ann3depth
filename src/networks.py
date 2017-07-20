@@ -1,5 +1,6 @@
 import itertools
 import logging
+import math
 import os
 import signal
 import sys
@@ -13,6 +14,7 @@ import numpy as np
 import data
 
 logger = logging.getLogger('ann3depth')
+
 
 def create_reset_metric(metric, scope='reset_metrics', **metric_args):
     with tf.variable_scope(scope) as scope:
@@ -74,12 +76,12 @@ class DepthMapNetwork:
 
             if not self.cont:  # Create new FileWriter path
                 filewriter_path = os.path.join('.', tbdir,
-                                    type(self).__name__,
-                                    datetime.now().strftime(
-                                        f'%m-%dT%H-%M'))
+                                               type(self).__name__,
+                                               datetime.now().strftime(
+                                                   f'%m-%dT%H-%M'))
             else:  # Select old filewriter path
-                directories = sorted(os.listdir(os.path.join('.', tbdir,
-                                                    type(self).__name__)))
+                directories = sorted(os.listdir(
+                        os.path.join('.', tbdir, type(self).__name__)))
                 directories = [s for s in directories if s[0].isdigit()]
                 filewriter_path = os.path.join('.', tbdir, type(self).__name__,
                                                directories[-1])
@@ -109,26 +111,45 @@ class DepthMapNetwork:
         start = time.time()
         with tf.Session(graph=self.graph) as s:
             s.run(tf.global_variables_initializer())
-            start_epoch = 1
             if self.cont:
                 self.saver.restore(s, self.ckpt)
-                step = s.run(self.step)
-                start_epoch = 1 + int(step / (len(dataset_train) / batchsize))
+            step = s.run(self.step)
+            start_epoch = 1 + math.ceil(step / (len(dataset_train) / batchsize))
             self.__register_kill_handlers(s)
 
-            logger.debug(f'Starting at epoch {start_epoch}')
+            self.tb_log.add_session_log(
+                tf.SessionLog(status=tf.SessionLog.START),
+                global_step=step)
+
+            logger.debug(f'First epoch is {start_epoch}')
             for epoch in range(start_epoch, 1 + epochs):
                 epoch_start = time.time()
                 logger.info(f'Starting epoch {epoch}')
 
+                first_batch = True
                 for b_in, b_out in data.as_matrix_batches(dataset_train,
                                                           batchsize):
+
+                    run_metadata = tf.RunMetadata()
+                    run_options = tf.RunOptions(
+                        trace_level=tf.RunOptions.FULL_TRACE
+                                    if first_batch else
+                                    tf.RunOptions.NO_TRACE)
                     o, loss, step = s.run([self.optimizer,
                                            self.summary_loss_train,
                                            self.step],
                                           {self.input: b_in,
-                                           self.target: b_out})
+                                           self.target: b_out},
+                                          run_options,
+                                          run_metadata)
                     self.tb_log.add_summary(loss, step)
+                    if first_batch:
+                        try:
+                            self.tb_log.add_run_metadata(
+                                run_metadata, f'Epoch {epoch}', step)
+                        except ValueError as ve:
+                            logger.warning('Metadata not stored: %s', ve)
+                        first_batch = False
 
                 s.run(self.epoch_loss_reset)
                 for b_in, b_out in data.as_matrix_batches(
@@ -142,26 +163,39 @@ class DepthMapNetwork:
 
                 self.tb_log.add_summary(loss_test, step)
                 logger.info(f'Epoch {epoch} finished; ' +
-                      f'Elapsed time: {time.time() - start:.3f}; ' +
-                      f'Epoch time: {time.time() - epoch_start:.3f}; ' +
-                      f'Loss {loss}')
+                            f'Elapsed time: {time.time() - start:.3f}; ' +
+                            f'Epoch time: {time.time() - epoch_start:.3f}; ' +
+                            f'Loss {loss}')
                 if not epoch % self.ckptfreq:
                     logger.info(f'Saving checkpoints after epoch {epoch}')
+                    self.tb_log.add_session_log(
+                        tf.SessionLog(status=tf.SessionLog.CHECKPOINT),
+                        global_step=step)
                     self.saver.save(s, self.ckpt_path, global_step=self.step)
 
             logger.info('Saving final checkpoint')
             self.saver.save(s, self.ckpt_path, global_step=self.step)
+            self.tb_log.add_session_log(
+                tf.SessionLog(status=tf.SessionLog.STOP),
+                global_step=step)
 
     def __register_kill_handlers(self, session):
         def handler(signum, frame):
             logger.critical(f'Received signal {signal.Signals(signum).name}')
             self.saver.save(session, self.ckpt_path, global_step=self.step)
+            step = session.run(self.step)
+            self.tb_log.add_session_log(
+                tf.SessionLog(status=tf.SessionLog.CHECKPOINT),
+                global_step=step)
             logger.info(f'Saved successfully. Shutting down...')
             sys.exit('Shut down after receiving signal ' +
                      f'{signal.Signals(signum).name}')
-        for s in [signal.SIGUSR1, signal.SIGUSR2, signal.SIGALRM]:
+
+        for s in [signal.SIGUSR1, signal.SIGUSR2, signal.SIGALRM,
+                  signal.SIGINT]:
             signal.signal(s, handler)
             logger.debug(f'Registered handler for {s.name}')
+
 
 class DownsampleNetwork(DepthMapNetwork):
 
