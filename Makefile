@@ -107,7 +107,7 @@ smart: ${OUT_DIR}
 # Opens up tensorboard for inspection of graphs and summaries
 .PHONY: tb
 tb:
-	tensorboard --logdir=${TB_DIR}
+	tensorboard --logdir=${TB_DIR} --host=localhost
 
 # Installs the requirements from the requirements file
 .PHONY: install
