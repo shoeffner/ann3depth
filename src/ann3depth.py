@@ -54,6 +54,8 @@ def parse_args():
                         help='Create a checkpoint every N epochs.')
     parser.add_argument('--tbdir', '-l', default='tb_logs',
                         help='Tensorboard directory')
+    parser.add_argument('--timeout', '-k', default=4200, type=int,
+                        help='The time after which the process dies.')
     return parser.parse_args()
 
 
@@ -71,9 +73,8 @@ if __name__ == '__main__':
     args = parse_args()
     logger.debug(args)
 
-    timeout = 4200
-    signal.alarm(timeout)
-    logger.info(f'Killing job in {timeout} seconds.')
+    signal.alarm(args.timeout)
+    logger.info(f'Killing job in {args.timeout} seconds.')
 
     args.train(network=getattr(networks, args.network),
                epochs=args.epochs,

@@ -15,10 +15,11 @@ BATCHSIZE ?= 32
 DATASETS ?= make3d1
 CKPT_FREQ ?= 50
 CONT ?=
+TIMEOUT ?= 4200
 
 SCRIPT := python3 src/ann3depth.py
 COMMON_PARAMETERS := --ckptdir=${CKPT_DIR} --tbdir=${TB_DIR} --network=${NET}
-TRAIN_PARAMETERS := --epochs=${EPOCHS} --batchsize=${BATCHSIZE} --ckptfreq=${CKPT_FREQ} ${CONT}
+TRAIN_PARAMETERS := --epochs=${EPOCHS} --batchsize=${BATCHSIZE} --ckptfreq=${CKPT_FREQ} --timeout=${TIMEOUT} ${CONT}
 
 # Check if download is wanted, and if so, set dataset names
 # see http://stackoverflow.com/a/14061796/3004221
@@ -56,7 +57,7 @@ conda:
 # Submit a grid training job
 .PHONY: grid
 grid: ${LOG_DIR}
-	CONDAENV=${CONDAENV} NET=${NET} EPOCHS=${EPOCHS} BATCHSIZE=${BATCHSIZE} DATASETS=${DATASETS} CKPT_FREQ=${CKPT_FREQ} CONT=${CONT} qsub ./tools/grid/train.sge
+	CONDAENV=${CONDAENV} NET=${NET} EPOCHS=${EPOCHS} BATCHSIZE=${BATCHSIZE} DATASETS=${DATASETS} CKPT_FREQ=${CKPT_FREQ} TIMEOUT=${TIMEOUT} CONT=${CONT} qsub ./tools/grid/train.sge
 
 .PHONY: help
 help:

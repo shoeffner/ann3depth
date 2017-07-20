@@ -74,12 +74,15 @@ class DepthMapNetwork:
 
             if not self.cont:  # Create new FileWriter path
                 filewriter_path = os.path.join('.', tbdir,
+                                    type(self).__name__,
                                     datetime.now().strftime(
-                                        f'%m-%dT%H-%M_{type(self).__name__}'))
+                                        f'%m-%dT%H-%M'))
             else:  # Select old filewriter path
-                directories = sorted(os.listdir(os.path.join('.', tbdir)))
+                directories = sorted(os.listdir(os.path.join('.', tbdir,
+                                                    type(self).__name__)))
                 directories = [s for s in directories if s[0].isdigit()]
-                filewriter_path = os.path.join('.', tbdir, directories[-1])
+                filewriter_path = os.path.join('.', tbdir, type(self).__name__,
+                                               directories[-1])
 
             self.tb_log = tf.summary.FileWriter(filewriter_path, self.graph)
 
