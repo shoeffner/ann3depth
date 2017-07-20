@@ -72,6 +72,31 @@ class DepthMapNetwork:
                     self.summary_loss_test = tf.summary.scalar('test',
                                                                self.epoch_loss)
 
+                with tf.name_scope('train_img'):
+                    self.summary_input_train = tf.summary.image(
+                        'input', self.input)
+                    self.summary_output_train = tf.summary.image(
+                        'output', self.output)
+                    self.summary_target_train = tf.summary.image(
+                        'target', tf.expand_dims(self.target, -1))
+
+                with tf.name_scope('test_img'):
+                    self.summary_input_test = tf.summary.image(
+                        'input', self.input)
+                    self.summary_output_test = tf.summary.image(
+                        'output', self.output)
+                    self.summary_target_test = tf.summary.image(
+                        'target', tf.expand_dims(self.target, -1))
+
+                self.summary_train = tf.summary.merge(
+                    [self.summary_loss_train,
+                     self.summary_input_train,
+                     self.summary_output_train,
+                     self.summary_target_train])
+                self.summary_test = tf.summary.merge([self.summary_loss_test,
+                                                      self.summary_input_test,
+                                                      self.summary_output_test,
+                                                      self.summary_target_test])
                 self.saver = tf.train.Saver()
 
             if not self.cont:  # Create new FileWriter path
@@ -100,7 +125,7 @@ class DepthMapNetwork:
             for i, (b_in, b_out) in enumerate(
                     data.as_matrix_batches(dataset, 1, False)):
                 feed_dict = {self.input: b_in, self.target: b_out}
-                dataset[i].result, loss = s.run([self.output,
+                dataset[i].result, loss = s.run([tf.squeeze(self.output),
                                                  self.epoch_loss_update],
                                                 feed_dict)
             s.run(self.epoch_loss_reset)
@@ -135,14 +160,14 @@ class DepthMapNetwork:
                         trace_level=tf.RunOptions.FULL_TRACE
                                     if first_batch else
                                     tf.RunOptions.NO_TRACE)
-                    o, loss, step = s.run([self.optimizer,
-                                           self.summary_loss_train,
-                                           self.step],
-                                          {self.input: b_in,
-                                           self.target: b_out},
-                                          run_options,
-                                          run_metadata)
-                    self.tb_log.add_summary(loss, step)
+                    o, summary_train, step = s.run([self.optimizer,
+                                                    self.summary_train,
+                                                    self.step],
+                                                   {self.input: b_in,
+                                                    self.target: b_out},
+                                                   run_options,
+                                                   run_metadata)
+                    self.tb_log.add_summary(summary_train, step)
                     if first_batch:
                         try:
                             self.tb_log.add_run_metadata(
@@ -154,14 +179,14 @@ class DepthMapNetwork:
                 s.run(self.epoch_loss_reset)
                 for b_in, b_out in data.as_matrix_batches(
                         dataset_test, batchsize):
-                    loss_test, step, loss = s.run([self.summary_loss_test,
-                                                   self.step,
-                                                   self.epoch_loss_update],
-                                                  {self.input: b_in,
-                                                   self.target: b_out})
+                    summary_test, step, loss = s.run([self.summary_test,
+                                                      self.step,
+                                                      self.epoch_loss_update],
+                                                     {self.input: b_in,
+                                                      self.target: b_out})
                 s.run(self.epoch_loss_reset)
 
-                self.tb_log.add_summary(loss_test, step)
+                self.tb_log.add_summary(summary_test, step)
                 logger.info(f'Epoch {epoch} finished; ' +
                             f'Elapsed time: {time.time() - start:.3f}; ' +
                             f'Epoch time: {time.time() - epoch_start:.3f}; ' +
@@ -228,9 +253,10 @@ class DownsampleNetwork(DepthMapNetwork):
                                                 tf.nn.relu),
                                     name=f'Conv{i}'
                                     )
-        self.output = tf.squeeze(conv)
+        self.output = conv
 
-        self.loss = tf.losses.mean_squared_error(self.target, self.output)
+        self.loss = tf.losses.mean_squared_error(self.target,
+                                                 tf.squeeze(self.output))
         self.optimizer = tf.train.AdamOptimizer(
                             learning_rate=0.001,
                             epsilon=1.0
