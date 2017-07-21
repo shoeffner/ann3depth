@@ -83,4 +83,4 @@ Our next work items include (but may not be restricted to):
 
 # Last slide
 
-![Everything will work out just fine](docs/presentations/imgs/lastslide.jpg)
+![Everything will work out just fine](http://stage-media.ru/assets/gallery/2016-11-01_17-25-20.png)
