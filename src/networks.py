@@ -89,12 +89,10 @@ class DepthMapNetwork:
                         'target', tf.expand_dims(self.target, -1))
 
                 self.summary_train = tf.summary.merge(
-                    [self.summary_loss_train,
-                     self.summary_input_train,
+                    [self.summary_input_train,
                      self.summary_output_train,
                      self.summary_target_train])
-                self.summary_test = tf.summary.merge([self.summary_loss_test,
-                                                      self.summary_input_test,
+                self.summary_test = tf.summary.merge([self.summary_input_test,
                                                       self.summary_output_test,
                                                       self.summary_target_test])
                 self.saver = tf.train.Saver()
@@ -160,14 +158,16 @@ class DepthMapNetwork:
                         trace_level=tf.RunOptions.FULL_TRACE
                                     if first_batch else
                                     tf.RunOptions.NO_TRACE)
-                    o, summary_train, step = s.run([self.optimizer,
-                                                    self.summary_train,
-                                                    self.step],
-                                                   {self.input: b_in,
-                                                    self.target: b_out},
-                                                   run_options,
-                                                   run_metadata)
-                    self.tb_log.add_summary(summary_train, step)
+                    o, loss_train, summary_train, step = s.run(
+                        [self.optimizer,
+                         self.summary_loss_train,
+                         self.summary_train,
+                         self.step],
+                        {self.input: b_in,
+                         self.target: b_out},
+                        run_options,
+                        run_metadata)
+                    self.tb_log.add_summary(loss_train, step)
                     if first_batch:
                         try:
                             self.tb_log.add_run_metadata(
@@ -179,18 +179,26 @@ class DepthMapNetwork:
                 s.run(self.epoch_loss_reset)
                 for b_in, b_out in data.as_matrix_batches(
                         dataset_test, batchsize):
-                    summary_test, step, loss = s.run([self.summary_test,
-                                                      self.step,
-                                                      self.epoch_loss_update],
-                                                     {self.input: b_in,
-                                                      self.target: b_out})
+                    loss_test, step, loss, summary_test = s.run(
+                        [self.summary_loss_test,
+                         self.step,
+                         self.epoch_loss_update,
+                         self.summary_test],
+                        {self.input: b_in,
+                         self.target: b_out})
                 s.run(self.epoch_loss_reset)
 
-                self.tb_log.add_summary(summary_test, step)
+                self.tb_log.add_summary(loss_test, step)
+
+                if epoch % 100 == 1:
+                    self.tb_log.add_summary(summary_train, step)
+                    self.tb_log.add_summary(summary_test, step)
+
                 logger.info(f'Epoch {epoch} finished; ' +
                             f'Elapsed time: {time.time() - start:.3f}; ' +
                             f'Epoch time: {time.time() - epoch_start:.3f}; ' +
                             f'Loss {loss}')
+
                 if not epoch % self.ckptfreq:
                     logger.info(f'Saving checkpoints after epoch {epoch}')
                     self.tb_log.add_session_log(
