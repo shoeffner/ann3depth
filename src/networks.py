@@ -98,13 +98,13 @@ class DepthMapNetwork:
                 self.saver = tf.train.Saver()
 
             if self.cont:  # Select old filewriter path
-                directories = sorted(os.listdir(
-                        os.path.join('.', tbdir, type(self).__name__)))
-                if len(directories):
+                try:
+                    directories = sorted(os.listdir(
+                            os.path.join('.', tbdir, type(self).__name__)))
                     directories = [s for s in directories if s[0].isdigit()]
                     filewriter_path = os.path.join(
                         '.', tbdir, type(self).__name__, directories[-1])
-                else:
+                except (FileNotFoundError, IndexError):
                     filewriter_path = None
 
             if not self.cont or not filewriter_path:
@@ -114,6 +114,7 @@ class DepthMapNetwork:
                                                    f'%m-%dT%H-%M'))
 
             self.tb_log = tf.summary.FileWriter(filewriter_path, self.graph)
+            exit()
 
         return init
 
@@ -277,6 +278,53 @@ class DownsampleNetwork(DepthMapNetwork):
 
 class DeepConvolutionalNeuralFields(DepthMapNetwork):
 
+    def _unary_part(self, num_superpixels=5, size=224):
+        unary_layers = [
+            {'type': 'conv2d', 'size': 11, 'act': tf.nn.relu, 'filters': 64},
+            {'type': 'pool', 'pool_size': (2, 2), 'strides': (2, 2)},
+            {'type': 'conv2d', 'size': 5, 'act': tf.nn.relu, 'filters': 256},
+            {'type': 'pool', 'pool_size': (2, 2), 'strides': (2, 2)},
+            {'type': 'conv2d', 'size': 3, 'act': tf.nn.relu, 'filters': 256},
+            {'type': 'conv2d', 'size': 3, 'act': tf.nn.relu, 'filters': 256},
+            {'type': 'conv2d', 'size': 3, 'act': tf.nn.relu, 'filters': 256},
+            {'type': 'pool', 'pool_size': (2, 2), 'strides': (2, 2)},
+            {'type': 'fc', 'size': 4096, 'act': tf.nn.relu},
+            {'type': 'fc', 'size': 128, 'act': tf.nn.relu},
+            {'type': 'fc', 'size': 16, 'act': tf.nn.relu},
+            {'type': 'fc', 'size': 1, 'act': tf.nn.sigmoid},
+        ]
+
+        for sp in range(num_superpixels):
+            layer_in = tf.placeholder(tf.float32, shape=(None, size, size, 3),
+                                      name=f'superpixel_{sp}')
+
+            reuse = sp > 0  # If "None" this works structure-wise, but does not share variables
+            for i, layer in enumerate(unary_layers):
+                if layer['type'] == 'conv2d':
+                    layer_in = tf.layers.conv2d(
+                        inputs=layer_in,
+                        filters=layer['filters'],
+                        kernel_size=layer['size'],
+                        padding='same',
+                        activation=layer['act'],
+                        name=f"UnaryConv_{layer['size']}x{layer['size']}_{i}",
+                        reuse=reuse)
+                elif layer['type'] == 'pool':
+                    layer_in = tf.layers.max_pooling2d(
+                        inputs=layer_in,
+                        pool_size=layer['pool_size'],
+                        strides=layer['strides'],
+                        name=f'UnaryPool_{i}')
+                elif layer['type'] == 'fc':
+                    layer_in = tf.layers.dense(inputs=layer_in,
+                                               units=layer['size'],
+                                               activation=layer['act'],
+                                               name=f'UnaryDense_{i}',
+                                               reuse=reuse)
+
     @DepthMapNetwork.setup
     def __init__(self, input_shape, output_shape):
-        pass
+        # TODO: over segmentation instead
+        self._unary_part()
+        # self.array_part()
+        self.output = self.target
