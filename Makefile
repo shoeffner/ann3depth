@@ -9,7 +9,7 @@ LOG_DIR := grid_logs
 CONDAENV ?= asuckro-shoeffner-ann3depth
 
 # Default training parameters
-NET ?= DownsampleNetwork
+NET ?= DeepConvolutationalNeuralFields
 EPOCHS ?= 500
 BATCHSIZE ?= 32
 DATASETS ?= make3d1

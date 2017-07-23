@@ -269,3 +269,10 @@ class DownsampleNetwork(DepthMapNetwork):
                             learning_rate=0.001,
                             epsilon=1.0
                          ).minimize(self.loss, self.step)
+
+
+class DeepConvolutionalNeuralFields(DepthMapNetwork):
+
+    @DepthMapNetwork.setup
+    def __init__(self, input_shape, output_shape):
+        pass
