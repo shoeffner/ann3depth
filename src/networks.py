@@ -97,17 +97,21 @@ class DepthMapNetwork:
                                                       self.summary_target_test])
                 self.saver = tf.train.Saver()
 
-            if not self.cont:  # Create new FileWriter path
+            if self.cont:  # Select old filewriter path
+                directories = sorted(os.listdir(
+                        os.path.join('.', tbdir, type(self).__name__)))
+                if len(directories):
+                    directories = [s for s in directories if s[0].isdigit()]
+                    filewriter_path = os.path.join(
+                        '.', tbdir, type(self).__name__, directories[-1])
+                else:
+                    filewriter_path = None
+
+            if not self.cont or not filewriter_path:
                 filewriter_path = os.path.join('.', tbdir,
                                                type(self).__name__,
                                                datetime.now().strftime(
                                                    f'%m-%dT%H-%M'))
-            else:  # Select old filewriter path
-                directories = sorted(os.listdir(
-                        os.path.join('.', tbdir, type(self).__name__)))
-                directories = [s for s in directories if s[0].isdigit()]
-                filewriter_path = os.path.join('.', tbdir, type(self).__name__,
-                                               directories[-1])
 
             self.tb_log = tf.summary.FileWriter(filewriter_path, self.graph)
 
