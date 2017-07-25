@@ -1,3 +1,4 @@
+import functools
 import itertools
 import logging
 import math
@@ -23,6 +24,28 @@ def create_reset_metric(metric, scope='reset_metrics', **metric_args):
             scope, collection=tf.GraphKeys.LOCAL_VARIABLES)
         reset_op = tf.variables_initializer(vars)
     return metric_op, update_op, reset_op
+
+
+def make_template(scope=None, create_scope_now_=False, unique_name_=None,
+                  custom_getter_=None, **kwargs):
+    def make_tf_template(function):
+        template = tf.make_template(function.__name__
+                                    if scope is None or callable(scope)
+                                    else scope,
+                                    function,
+                                    create_scope_now_=create_scope_now_,
+                                    unique_name_=unique_name_,
+                                    custom_getter_=custom_getter_,
+                                    **kwargs)
+
+        @functools.wraps(function)
+        def wrapper(*caller_args, **caller_kwargs):
+            return template(*caller_args, **caller_kwargs)
+        return wrapper
+
+    if callable(scope):
+        return make_tf_template(scope)
+    return make_tf_template
 
 
 class DepthMapNetwork:
@@ -278,7 +301,8 @@ class DownsampleNetwork(DepthMapNetwork):
 
 class DeepConvolutionalNeuralFields(DepthMapNetwork):
 
-    def _unary_part(self, num_superpixels=5, size=224):
+    @make_template
+    def unary_part(self, layer_in):
         unary_layers = [
             {'type': 'conv2d', 'size': 11, 'act': tf.nn.relu, 'filters': 64},
             {'type': 'pool', 'pool_size': (2, 2), 'strides': (2, 2)},
@@ -293,38 +317,38 @@ class DeepConvolutionalNeuralFields(DepthMapNetwork):
             {'type': 'fc', 'size': 16, 'act': tf.nn.relu},
             {'type': 'fc', 'size': 1, 'act': tf.nn.sigmoid},
         ]
+        for i, layer in enumerate(unary_layers):
+            if layer['type'] == 'conv2d':
+                layer_in = tf.layers.conv2d(
+                    inputs=layer_in,
+                    filters=layer['filters'],
+                    kernel_size=layer['size'],
+                    padding='same',
+                    activation=layer['act'],
+                    name=f"UnaryConv_{layer['size']}x{layer['size']}_{i}")
+            elif layer['type'] == 'pool':
+                layer_in = tf.layers.max_pooling2d(
+                    inputs=layer_in,
+                    pool_size=layer['pool_size'],
+                    strides=layer['strides'],
+                    name=f'UnaryPool_{i}')
+            elif layer['type'] == 'fc':
+                layer_in = tf.layers.dense(inputs=layer_in,
+                                           units=layer['size'],
+                                           activation=layer['act'],
+                                           name=f'UnaryDense_{i}')
+        return layer_in
 
+    def _create_unary_part(self, num_superpixels=5, size=224):
+        collection = []
         for sp in range(num_superpixels):
             layer_in = tf.placeholder(tf.float32, shape=(None, size, size, 3),
                                       name=f'superpixel_{sp}')
-
-            reuse = sp > 0  # If "None" this works structure-wise, but does not share variables
-            for i, layer in enumerate(unary_layers):
-                if layer['type'] == 'conv2d':
-                    layer_in = tf.layers.conv2d(
-                        inputs=layer_in,
-                        filters=layer['filters'],
-                        kernel_size=layer['size'],
-                        padding='same',
-                        activation=layer['act'],
-                        name=f"UnaryConv_{layer['size']}x{layer['size']}_{i}",
-                        reuse=reuse)
-                elif layer['type'] == 'pool':
-                    layer_in = tf.layers.max_pooling2d(
-                        inputs=layer_in,
-                        pool_size=layer['pool_size'],
-                        strides=layer['strides'],
-                        name=f'UnaryPool_{i}')
-                elif layer['type'] == 'fc':
-                    layer_in = tf.layers.dense(inputs=layer_in,
-                                               units=layer['size'],
-                                               activation=layer['act'],
-                                               name=f'UnaryDense_{i}',
-                                               reuse=reuse)
+            collection.append(self.unary_part(layer_in))
+        return tf.concat(collection, 0)
 
     @DepthMapNetwork.setup
     def __init__(self, input_shape, output_shape):
-        # TODO: over segmentation instead
-        self._unary_part()
-        # self.array_part()
+        # TODO: over segmentation
+        z = self._create_unary_part()
         self.output = self.target
