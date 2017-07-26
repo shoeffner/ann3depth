@@ -136,7 +136,11 @@ class DepthMapNetwork:
                                                datetime.now().strftime(
                                                    f'%m-%dT%H-%M'))
 
-            self.tb_log = tf.summary.FileWriter(filewriter_path, self.graph)
+            logger.info(f'FileWriter writes to {filewriter_path}.')
+            self.tb_log = tf.summary.FileWriter(filewriter_path,
+                                                self.graph
+                                                if not self.cont else
+                                                None)
             exit()
 
         return init
