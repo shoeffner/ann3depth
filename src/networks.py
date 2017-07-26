@@ -305,9 +305,41 @@ class DownsampleNetwork(DepthMapNetwork):
 
 class DeepConvolutionalNeuralFields(DepthMapNetwork):
 
+    def _create_layers(self, name, layer_in, layers):
+        for i, layer in enumerate(layers):
+            if layer['type'] == 'conv2d':
+                layer_in = tf.layers.conv2d(
+                    inputs=layer_in, filters=layer['filters'],
+                    kernel_size=layer['size'],
+                    padding='same', activation=layer['act'],
+                    name=f"{name.title()}Conv_{layer['size']}x{layer['size']}_{i}")
+            elif layer['type'] == 'pool':
+                layer_in = tf.layers.max_pooling2d(
+                    inputs=layer_in,
+                    pool_size=layer['pool_size'],
+                    strides=layer['strides'],
+                    name=f'{name.title()}Pool_{i}')
+            elif layer['type'] == 'fc':
+                layer_in = tf.layers.dense(inputs=layer_in,
+                                           units=layer['size'],
+                                           activation=layer['act'],
+                                           name=f'{name.title()}Dense_{i}')
+            elif layer['type'] == 'reshape':
+                layer_in = tf.reshape(tensor=layer_in,
+                                      shape=layer['shape'],
+                                      name=f'{name.title()}Reshape_{i}')
+        return layer_in
+
+    @make_template
+    def pairwise_part(self, layer_in):
+        layers = [
+            {'type': 'fc', 'size': 1, 'act': None}
+        ]
+        return self._create_layers('Pairwise', layer_in, layers)
+
     @make_template
     def unary_part(self, layer_in):
-        unary_layers = [
+        layers = [
             {'type': 'conv2d', 'size': 11, 'act': tf.nn.relu, 'filters': 64},
             {'type': 'pool', 'pool_size': (2, 2), 'strides': (2, 2)},
             {'type': 'conv2d', 'size': 5, 'act': tf.nn.relu, 'filters': 256},
@@ -316,32 +348,13 @@ class DeepConvolutionalNeuralFields(DepthMapNetwork):
             {'type': 'conv2d', 'size': 3, 'act': tf.nn.relu, 'filters': 256},
             {'type': 'conv2d', 'size': 3, 'act': tf.nn.relu, 'filters': 256},
             {'type': 'pool', 'pool_size': (2, 2), 'strides': (2, 2)},
+            {'type': 'reshape', 'shape': [-1, 1]},
             {'type': 'fc', 'size': 4096, 'act': tf.nn.relu},
             {'type': 'fc', 'size': 128, 'act': tf.nn.relu},
             {'type': 'fc', 'size': 16, 'act': tf.nn.relu},
             {'type': 'fc', 'size': 1, 'act': tf.nn.sigmoid},
         ]
-        for i, layer in enumerate(unary_layers):
-            if layer['type'] == 'conv2d':
-                layer_in = tf.layers.conv2d(
-                    inputs=layer_in,
-                    filters=layer['filters'],
-                    kernel_size=layer['size'],
-                    padding='same',
-                    activation=layer['act'],
-                    name=f"UnaryConv_{layer['size']}x{layer['size']}_{i}")
-            elif layer['type'] == 'pool':
-                layer_in = tf.layers.max_pooling2d(
-                    inputs=layer_in,
-                    pool_size=layer['pool_size'],
-                    strides=layer['strides'],
-                    name=f'UnaryPool_{i}')
-            elif layer['type'] == 'fc':
-                layer_in = tf.layers.dense(inputs=layer_in,
-                                           units=layer['size'],
-                                           activation=layer['act'],
-                                           name=f'UnaryDense_{i}')
-        return layer_in
+        return self._create_layers('Unary', layer_in, layers)
 
     def _create_unary_part(self, num_superpixels=5, size=224):
         collection = []
@@ -349,10 +362,20 @@ class DeepConvolutionalNeuralFields(DepthMapNetwork):
             layer_in = tf.placeholder(tf.float32, shape=(None, size, size, 3),
                                       name=f'superpixel_{sp}')
             collection.append(self.unary_part(layer_in))
-        return tf.concat(collection, 0)
+        return tf.concat(collection, 0, 'UnaryConcat')
+
+    def _create_pairwise_part(self, num_superpixels=5, k_pairs=3):
+        collection = []
+        for sp in range(num_superpixels):
+            layer_in = tf.placeholder(tf.float32, shape=(None, k_pairs, 1),
+                                      name=f'similarity_{sp}')
+            collection.append(self.pairwise_part(layer_in))
+        return tf.concat(collection, 0, 'PairwiseConcat')
 
     @DepthMapNetwork.setup
     def __init__(self, input_shape, output_shape):
         # TODO: over segmentation
         z = self._create_unary_part()
+        r = self._create_pairwise_part()
+        # TODO: loss function, optimizer
         self.output = self.target
