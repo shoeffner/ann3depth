@@ -351,8 +351,8 @@ class DeepConvolutionalNeuralFields(DepthMapNetwork):
             {'type': 'reshape', 'shape': [-1, 1]},
             {'type': 'fc', 'size': 4096, 'act': tf.nn.relu},
             {'type': 'fc', 'size': 128, 'act': tf.nn.relu},
-            {'type': 'fc', 'size': 16, 'act': tf.nn.relu},
-            {'type': 'fc', 'size': 1, 'act': tf.nn.sigmoid},
+            {'type': 'fc', 'size': 16, 'act': tf.nn.sigmoid},
+            {'type': 'fc', 'size': 1, 'act': None},
         ]
         return self._create_layers('Unary', layer_in, layers)
 
@@ -377,5 +377,6 @@ class DeepConvolutionalNeuralFields(DepthMapNetwork):
         # TODO: over segmentation
         z = self._create_unary_part()
         r = self._create_pairwise_part()
+
         # TODO: loss function, optimizer
         self.output = self.target
