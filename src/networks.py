@@ -356,27 +356,77 @@ class DeepConvolutionalNeuralFields(DepthMapNetwork):
         ]
         return self._create_layers('Unary', layer_in, layers)
 
-    def _create_unary_part(self, num_superpixels=5, size=224):
-        collection = []
-        for sp in range(num_superpixels):
-            layer_in = tf.placeholder(tf.float32, shape=(None, size, size, 3),
-                                      name=f'superpixel_{sp}')
-            collection.append(self.unary_part(layer_in))
-        return tf.concat(collection, 0, 'UnaryConcat')
+    def _create_unary_part(self, superpixels):
+        with tf.name_scope('UnaryPart'):
+            collection = []
+            for sp in superpixels:
+                collection.append(self.unary_part(sp))
+            return tf.concat(collection, 0, 'UnaryConcat')
 
-    def _create_pairwise_part(self, num_superpixels=5, k_pairs=3):
-        collection = []
-        for sp in range(num_superpixels):
-            layer_in = tf.placeholder(tf.float32, shape=(None, k_pairs, 1),
-                                      name=f'similarity_{sp}')
-            collection.append(self.pairwise_part(layer_in))
-        return tf.concat(collection, 0, 'PairwiseConcat')
+    def _create_pairwise_part(self, superpixels):
+        with tf.name_scope('PairwisePart'):
+            collection = []
+            for i, sp_l in enumerate(superpixels):
+                for sp_r in superpixels[i+1:]:
+                    similarity = self._similarity(sp_l, sp_r)
+                    collection.append(self.pairwise_part(similarity))
+            return tf.concat(collection, 0, 'PairwiseConcat')
+
+    def _similarity_color_diff(self, superpixel_p, superpixel_q):
+        with tf.name_scope('color_diff'):
+            diff = superpixel_p - superpixel_q
+            return tf.reduce_mean(tf.reduce_mean(diff, 1), 1)
+
+    def _similarity_color_hist(self, superpixel_p, superpixel_q):
+        with tf.name_scope('color_hist'):
+            # These floats are equivalent to 0x000000, and 0xffffff
+            value_range = (0., 16777215.)
+            bins = 100
+
+            def flat_color(superpixel):
+                # These floats are equivalent to 0xff0000, 0x00ff00, 0x0000ff
+                return tf.tensordot(superpixel, (16711680., 65280., 255.), 3)
+
+            def make_histogram(superpixel):
+                values = flat_color(superpixel)
+                return tf.histogram_fixed_width(values=values,
+                                                value_range=value_range,
+                                                nbins=bins)
+
+            hist_p = tf.map_fn(make_histogram, superpixel_p)
+            hist_q = tf.map_fn(make_histogram, superpixel_q)
+
+            return tf.to_float(hist_p - hist_q)
+
+    def _similarity_local_bin_pattern(self, superpixel_p, superpixel_q):
+        # TODO: DOI: 10.1109/ICPR.1994.576366
+        with tf.name_scope('local_bin_pattern'):
+            return tf.reduce_sum(
+                tf.reduce_sum(
+                    tf.zeros_like(superpixel_p), 1), 1)
+
+    def _similarity(self, superpixel_p, superpixel_q, gamma=1):
+        with tf.name_scope('Similarity'):
+            sim = lambda x: tf.exp(-gamma * tf.norm(x, 1))
+            similarities = [
+                tf.map_fn(sim, self._similarity_color_diff(superpixel_p,
+                                                           superpixel_q)),
+                tf.map_fn(sim, self._similarity_color_hist(superpixel_p,
+                                                           superpixel_q)),
+                tf.map_fn(sim, self._similarity_local_bin_pattern(superpixel_p,
+                                                                  superpixel_q))
+            ]
+            concat = tf.concat(similarities, 0, 'SimilarityConcat')
+            return tf.expand_dims(concat, 1)
 
     @DepthMapNetwork.setup
     def __init__(self, input_shape, output_shape):
-        # TODO: over segmentation
-        z = self._create_unary_part()
-        r = self._create_pairwise_part()
+        # TODO: over segmentation instead of dummies
+        superpixels = [tf.placeholder(tf.float32,
+                                      shape=(None, 224, 224, 3),
+                                      name='superpixel') for x in range(5)]
+        z = self._create_unary_part(superpixels)
+        r = self._create_pairwise_part(superpixels)
 
         # TODO: loss function, optimizer
         self.output = self.target
