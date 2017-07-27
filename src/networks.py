@@ -159,7 +159,6 @@ class DepthMapNetwork:
                                                 self.graph
                                                 if not self.cont else
                                                 None)
-            exit()
 
         return init
 
