@@ -48,6 +48,16 @@ def make_template(scope=None, create_scope_now_=False, unique_name_=None,
     return make_tf_template
 
 
+def with_scope(scope):
+    def add_scope(function):
+        @functools.wraps(function)
+        def wrapper(*args, **kwargs):
+            with tf.name_scope(scope):
+                return function(*args, **kwargs)
+        return wrapper
+    return add_scope
+
+
 class DepthMapNetwork:
 
     def setup(__init__):
@@ -72,12 +82,13 @@ class DepthMapNetwork:
                                              shape=(None, ) + output_shape,
                                              name='target')
 
-                self.optimizer = tf.Print(self.input, [''],
-                                          'No self.optimizer implemented', 1)
-                self.output = tf.Print(self.input, [''],
-                                       'No self.output implemented', 1)
-                self.loss = tf.Print(self.input, [''],
-                                     'No self.loss implemented', 1)
+                with tf.name_scope('Warnings'):
+                    self.optimizer = tf.Print(
+                        self.input, [''], 'No self.optimizer implemented', 1)
+                    self.output = tf.Print(self.input, [''],
+                                           'No self.output implemented', 1)
+                    self.loss = tf.Print(self.input, [''],
+                                         'No self.loss implemented', 1)
 
                 __init__(self, input_shape, output_shape)
 
