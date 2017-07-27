@@ -20,18 +20,45 @@ import numpy as np
 import scipy.io as sio
 import scipy.misc as smisc
 
-WIDTH = 640
-HEIGHT = 480
-D_WIDTH = 55 * WIDTH // HEIGHT
-D_HEIGHT = 55
+WIDTH = int(os.environ.get('WIDTH', 640))
+HEIGHT = int(os.environ.get('HEIGHT', 480))
+D_HEIGHT = int(os.environ.get('DHEIGHT', 55))
+D_WIDTH = int(os.environ.get('DWIDTH', D_HEIGHT * WIDTH // HEIGHT))
 
-START = 0
-LIMIT = None  # Default: None
+START = int(os.environ.get('START', 0))
+try:
+    LIMIT = os.environ.get('LIMIT')
+except ValueError:
+    LIMIT = None
 
 
 def include(img):
     """Filter to remove files which are not part of the datasets."""
     return img[img.index('.') + 1:] not in ['txt', 'db']
+
+
+def __empty_dirs_or_fail(directories):
+    """If the environment variable FORCE is set to a value which evaluates to
+    True, the directories are emptied. Otherwise this function checks whether
+    the directories are empty or not, and if not, it raises a FileExistsError.
+
+    Args:
+        directories: directories to check.
+
+    Raises:
+        FileExistsError if directory is not empty and environment FORCE is not
+        set to True.
+    """
+    if os.environ.get('FORCE'):
+        for directory in directories:
+            files = os.listdir(directory)
+            for f in files:
+                os.remove(os.path.join(directory, f))
+        return
+    for directory in directories:
+        if os.listdir(directory) != []:
+            msg = f'Directory is not empty: {directory}, aborting... Use FORCE=1!'
+            raise FileExistsError(msg)
 
 
 def __process_make3d1(path_train, path_test):
@@ -44,10 +71,7 @@ def __process_make3d1(path_train, path_test):
 
     target_path = [path_train, path_test]
 
-    if os.listdir(path_train) != [] or os.listdir(path_test) != []:
-        print(
-            f'At least one of the target directories is not empty: {target_path}, aborting preprocessing...')
-        return
+    __empty_dirs_or_fail(target_path)
 
     for dp, ip, tp in zip(depth_path, img_path, target_path):
         print(f'Preprocessing images in {dp} and {ip}')
@@ -86,10 +110,7 @@ def __process_make3d2(path_train, path_test):
                                                 'Dataset2_Images']]
     target_path = [path_train, path_test]
 
-    if os.listdir(path_train) != [] or os.listdir(path_test) != []:
-        print(
-            f'At least one of the target directories is not empty: {target_path}, aborting preprocessing...')
-        return
+    __empty_dirs_or_fail(target_path)
 
     for dp, ip, tp in zip(depth_path, img_path, target_path):
         print(f'Preprocessing images in {dp} and {ip}')
@@ -126,10 +147,7 @@ def __process_nyu(path_train, path_test):
 
     path = os.path.join('data', 'nyu', 'unpacked', 'nyu_depth_v2_labeled.mat')
 
-    if os.listdir(path_train) != [] or os.listdir(path_test) != []:
-        print(
-            f'At least one of the target directories is not empty: {target_path}, aborting preprocessing...')
-        return
+    __empty_dirs_or_fail(target_path)
 
     c = 0
     with h5py.File(path) as mat:
@@ -190,15 +208,18 @@ def main():
     print(f'Images: {WIDTH}x{HEIGHT} Depths: {D_WIDTH}x{D_HEIGHT}')
 
     for key, processor in processors.items():
-        if len(sys.argv) > 1:
-            if key in sys.argv:
+        try:
+            if len(sys.argv) > 1:
+                if key in sys.argv:
+                    print(f'Preprocessing {key}')
+                    processor(os.path.join(path_train, key),
+                              os.path.join(path_test, key))
+            else:  # try to preprocess everything
                 print(f'Preprocessing {key}')
                 processor(os.path.join(path_train, key),
                           os.path.join(path_test, key))
-        else:  # try to preprocess everything
-            print(f'Preprocessing {key}')
-            processor(os.path.join(path_train, key),
-                      os.path.join(path_test, key))
+        except FileExistsError as fe:
+            print(fe)
     print('Preprocessing done.')
 
 

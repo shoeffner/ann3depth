@@ -17,6 +17,15 @@ CKPT_FREQ ?= 50
 CONT ?=
 TIMEOUT ?= 4200
 
+# Preprocessing parameters
+WIDTH ?= 640
+HEIGHT ?= 480
+DHEIGHT ?= 55
+DWIDTH ?= 73
+FORCE ?=
+START ?= 0
+LIMIT ?=
+
 SCRIPT := python3 src/ann3depth.py
 COMMON_PARAMETERS := --ckptdir=${CKPT_DIR} --tbdir=${TB_DIR} --network=${NET}
 TRAIN_PARAMETERS := --epochs=${EPOCHS} --batchsize=${BATCHSIZE} --ckptfreq=${CKPT_FREQ} --timeout=${TIMEOUT} ${CONT}
@@ -82,19 +91,19 @@ doc: ${OUT_DIR}
 # list datasets to be used with download target
 .PHONY: datasets
 datasets:
-	@python3 tools/data_downloader.py --list
+	python3 tools/data_downloader.py --list
 
 
 # download data sets and extract them
 .PHONY: download
 download: ${DATA_DIR}
-	@python3 tools/data_downloader.py $(DATASETS)
+	python3 tools/data_downloader.py $(DATASETS)
 
 
 # preprocess data sets and extract them
 .PHONY: preprocess
 preprocess: download ${DATA_DIR}
-	@python3 tools/data_preprocessor.py $(DATASETS)
+	WIDTH=${WIDTH} HEIGHT=${HEIGHT} DHEIGHT=${DHEIGHT} DWIDTH=${DWIDTH} FORCE=${FORCE} START=${START} LIMIT=${LIMIT} python3 tools/data_preprocessor.py $(DATASETS)
 
 
 # 1 page SMART goals presentation slide
