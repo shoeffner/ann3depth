@@ -48,6 +48,13 @@ def make_template(scope=None, create_scope_now_=False, unique_name_=None,
     return make_tf_template
 
 
+def conv_dim(tf_dimension):
+    try:
+        return int(tf_dimension)
+    except TypeError:
+        return -1
+
+
 def with_scope(scope):
     def add_scope(function):
         @functools.wraps(function)
@@ -315,6 +322,9 @@ class DownsampleNetwork(DepthMapNetwork):
 
 
 class DeepConvolutionalNeuralFields(DepthMapNetwork):
+    """Implements Liu et al. (2015): Learning Depth from Single Monocular Images
+    Using Deep Convolutional Neural Fields.  DOI: 10.1109/TPAMI.2015.2505283
+    """
 
     def _create_layers(self, name, layer_in, layers):
         for i, layer in enumerate(layers):
@@ -367,77 +377,163 @@ class DeepConvolutionalNeuralFields(DepthMapNetwork):
         ]
         return self._create_layers('Unary', layer_in, layers)
 
-    def _create_unary_part(self, superpixels):
-        with tf.name_scope('UnaryPart'):
-            collection = []
-            for sp in superpixels:
-                collection.append(self.unary_part(sp))
-            return tf.concat(collection, 0, 'UnaryConcat')
+    @with_scope('UnaryPart')
+    def _create_unary_part(self, patches):
+        new_shape = [conv_dim(patches.shape[i]) for i in [1, 0, 2, 3, 4]]
+        net = tf.map_fn(self.unary_part, tf.reshape(patches, new_shape),
+                        name='UnaryConcat')
+        return tf.reshape(net, [-1, conv_dim(patches.shape[1]), 1])
 
+    @with_scope('PairwisePart')
     def _create_pairwise_part(self, superpixels):
-        with tf.name_scope('PairwisePart'):
-            collection = []
-            for i, sp_l in enumerate(superpixels):
-                for sp_r in superpixels[i+1:]:
-                    similarity = self._similarity(sp_l, sp_r)
-                    collection.append(self.pairwise_part(similarity))
-            return tf.concat(collection, 0, 'PairwiseConcat')
+        def combine_pairwise(superpixels):
+            indices = []
+            for i in range(superpixels.shape[0]):
+                for j in range(i + 1, superpixels.shape[0]):
+                    indices.append([[i], [j]])
+            return tf.gather_nd(superpixels, indices)
 
+        def apply_similarity(combination):
+            p = tf.gather_nd(combination, [0])
+            q = tf.gather_nd(combination, [1])
+            return self._similarity(p, q)
+
+        combinations = tf.map_fn(combine_pairwise, superpixels)
+        concat = tf.map_fn(lambda c: tf.map_fn(apply_similarity, c),
+                           combinations)
+
+        new_shape = [conv_dim(concat.shape[i]) for i in [1, 0, 2, 3]]
+        net = tf.map_fn(self.pairwise_part, tf.reshape(concat, new_shape),
+                        name='PairwiseConcat')
+        return tf.reshape(net, [-1, conv_dim(concat.shape[1]), 1])
+
+    @with_scope('color_diff')
     def _similarity_color_diff(self, superpixel_p, superpixel_q):
-        with tf.name_scope('color_diff'):
-            diff = superpixel_p - superpixel_q
-            return tf.reduce_mean(tf.reduce_mean(diff, 1), 1)
+        diff = superpixel_p - superpixel_q
+        return tf.reduce_mean(tf.reduce_mean(diff, 0), 0)
 
+    @with_scope('color_hist')
     def _similarity_color_hist(self, superpixel_p, superpixel_q):
-        with tf.name_scope('color_hist'):
-            # These floats are equivalent to 0x000000, and 0xffffff
-            value_range = (0., 16777215.)
-            bins = 100
+        # These floats are equivalent to 0x000000, and 0xffffff
+        value_range = (0., 16777215.)
+        bins = 100
 
-            def flat_color(superpixel):
-                # These floats are equivalent to 0xff0000, 0x00ff00, 0x0000ff
-                return tf.tensordot(superpixel, (16711680., 65280., 255.), 3)
+        def flat_color(superpixel):
+            # These floats are equivalent to 0xff0000, 0x00ff00, 0x0000ff
+            return tf.reduce_sum(superpixel_p * (16711680., 65280., 255.), 2)
 
-            def make_histogram(superpixel):
-                values = flat_color(superpixel)
-                return tf.histogram_fixed_width(values=values,
-                                                value_range=value_range,
-                                                nbins=bins)
+        def make_histogram(superpixel):
+            values = flat_color(superpixel)
+            return tf.histogram_fixed_width(values=values,
+                                            value_range=value_range,
+                                            nbins=bins)
 
-            hist_p = tf.map_fn(make_histogram, superpixel_p)
-            hist_q = tf.map_fn(make_histogram, superpixel_q)
+        hist_p = make_histogram(superpixel_p)
+        hist_q = make_histogram(superpixel_q)
 
-            return tf.to_float(hist_p - hist_q)
+        return tf.to_float(hist_p - hist_q)
 
+    @with_scope('local_bin_pattern')
     def _similarity_local_bin_pattern(self, superpixel_p, superpixel_q):
         # TODO: DOI: 10.1109/ICPR.1994.576366
-        with tf.name_scope('local_bin_pattern'):
-            return tf.reduce_sum(
-                tf.reduce_sum(
-                    tf.zeros_like(superpixel_p), 1), 1)
+        return tf.reduce_sum(tf.reduce_sum(tf.zeros_like(superpixel_p), 0), 0)
 
-    def _similarity(self, superpixel_p, superpixel_q, gamma=1):
-        with tf.name_scope('Similarity'):
-            sim = lambda x: tf.exp(-gamma * tf.norm(x, 1))
-            similarities = [
-                tf.map_fn(sim, self._similarity_color_diff(superpixel_p,
-                                                           superpixel_q)),
-                tf.map_fn(sim, self._similarity_color_hist(superpixel_p,
-                                                           superpixel_q)),
-                tf.map_fn(sim, self._similarity_local_bin_pattern(superpixel_p,
-                                                                  superpixel_q))
-            ]
-            concat = tf.concat(similarities, 0, 'SimilarityConcat')
-            return tf.expand_dims(concat, 1)
+    @with_scope('Similarity')
+    def _similarity(self, superpixel_p, superpixel_q):
+        sim = lambda x: tf.exp(-self.gamma * tf.norm(x, 1))
+        similarities = [
+            sim(self._similarity_color_diff(superpixel_p, superpixel_q)),
+            sim(self._similarity_color_hist(superpixel_p, superpixel_q)),
+            sim(self._similarity_local_bin_pattern(superpixel_p, superpixel_q))
+        ]
+        return tf.expand_dims(tf.stack(similarities, 0), -1)
+
+    @with_scope('Segmentation')
+    def _segment(self, input_images, target_images):
+        # TODO: 10.1023/B:VISI.0000022288.19776.77
+        sp_size = (41, 41)
+        patch_size = (224, 224)
+
+        def extract_patches(images, patch_size=patch_size, sp_size=sp_size):
+            patches = tf.extract_image_patches(images=images,
+                                               ksizes=[1, *patch_size, 1],
+                                               strides=[1, *sp_size, 1],
+                                               rates=[1, 1, 1, 1],
+                                               padding='SAME')
+            return tf.map_fn(
+                lambda p:
+                    tf.reshape(p, (-1, *patch_size, int(images.shape[-1]))),
+                patches)
+        patches_in = extract_patches(input_images, patch_size, sp_size)
+        superpixels_in = extract_patches(input_images, sp_size, sp_size)
+        patches_target = extract_patches(target_images, patch_size, sp_size)
+        superpixels_target = extract_patches(target_images, sp_size,
+                                             sp_size)
+        return superpixels_in, patches_in, superpixels_target, patches_target
+
+    @with_scope('Result')
+    def _convert_to_output(self, z, output_shape):
+        x = tf.sqrt(int(z.shape[1]) * output_shape[1] / output_shape[0])
+        y = tf.cast(output_shape[0] / output_shape[1] * x, tf.int32)
+        x = tf.cast(x, tf.int32)
+        reshaped = tf.reshape(z, [-1, x, y, 1])
+        # TODO: resize
+        return reshaped
+
+    @with_scope('LossFunction')
+    def _create_loss_part(self, target_superpixels, z, r):
+        def mean(superpixel):
+            return tf.reduce_mean(tf.reduce_mean(superpixel, 0), 0)
+
+        y = tf.map_fn(lambda pix: tf.map_fn(mean, pix), target_superpixels)
+
+        # y to z
+        yz = tf.reduce_sum(tf.squared_difference(y, z), 1)
+
+        # Rpq
+        def combine_pairwise(superpixels):
+            indices = []
+            for i in range(superpixels.shape[0]):
+                for j in range(i + 1, superpixels.shape[0]):
+                    indices.append([[i], [j]])
+            return tf.gather_nd(superpixels, indices)
+
+        def sq_diff(pair):
+            p = tf.gather_nd(pair, [0])
+            q = tf.gather_nd(pair, [1])
+            return (p - q) * (p - q)
+
+        y_combs = tf.map_fn(combine_pairwise, y)
+        y_diffs = tf.map_fn(
+            lambda batch: tf.map_fn(
+                sq_diff, batch), y_combs)
+        rpq = 0.5 * tf.reduce_sum(y_diffs * r, 1)
+
+        # E(y, x)
+        energy = yz + rpq
+
+        # Neg log-likelihood
+        exp_energy = tf.exp(-energy)
+        return -tf.log(exp_energy / tf.cumsum(exp_energy))
 
     @DepthMapNetwork.setup
     def __init__(self, input_shape, output_shape):
-        # TODO: over segmentation instead of dummies
-        superpixels = [tf.placeholder(tf.float32,
-                                      shape=(None, 224, 224, 3),
-                                      name='superpixel') for x in range(5)]
-        z = self._create_unary_part(superpixels)
-        r = self._create_pairwise_part(superpixels)
+        # Parameters
+        self.gamma = 1  # Liu et al. (2015), p. 5, sec 2.2
 
-        # TODO: loss function, optimizer
-        self.output = self.target
+        # Inputs
+        self.target = tf.expand_dims(self.target, -1)
+
+        # Network structure
+        (sp_in, pat_in, sp_tar, pat_tar) = self._segment(self.input, self.target)
+        z = self._create_unary_part(pat_in)
+        r = self._create_pairwise_part(sp_in)
+
+        self.output = self._convert_to_output(z, output_shape)
+
+        # loss function, optimizer
+        self.loss = self._create_loss_part(sp_tar, z, r)
+        self.optimizer = tf.train.AdamOptimizer(
+                            learning_rate=0.001,
+                            epsilon=1.0
+                         ).minimize(self.loss, self.step)
