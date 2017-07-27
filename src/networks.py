@@ -521,10 +521,10 @@ class DeepConvolutionalNeuralFields(DepthMapNetwork):
         self.gamma = 1  # Liu et al. (2015), p. 5, sec 2.2
 
         # Inputs
-        self.target = tf.expand_dims(self.target, -1)
+        target = tf.expand_dims(self.target, -1)
 
         # Network structure
-        (sp_in, pat_in, sp_tar, pat_tar) = self._segment(self.input, self.target)
+        (sp_in, pat_in, sp_tar, pat_tar) = self._segment(self.input, target)
         z = self._create_unary_part(pat_in)
         r = self._create_pairwise_part(sp_in)
 
