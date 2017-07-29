@@ -378,6 +378,7 @@ class DeepConvolutionalNeuralFields(DepthMapNetwork):
 
     @with_scope('UnaryPart')
     def _create_unary_part(self, patches):
+        logger.debug(f'Creating unary part. Patches: {patches}')
         new_shape = [conv_dim(patches.shape[i]) for i in [1, 0, 2, 3, 4]]
         net = tf.map_fn(self.unary_part, tf.reshape(patches, new_shape),
                         name='UnaryConcat')
@@ -385,6 +386,7 @@ class DeepConvolutionalNeuralFields(DepthMapNetwork):
 
     @with_scope('PairwisePart')
     def _create_pairwise_part(self, superpixels):
+        logger.debug(f'Creating pairwise part. Superpixels: {superpixels}')
         def combine_pairwise(superpixels):
             indices = []
             for i in range(superpixels.shape[0]):
@@ -452,6 +454,8 @@ class DeepConvolutionalNeuralFields(DepthMapNetwork):
         # TODO: 10.1023/B:VISI.0000022288.19776.77
         sp_size = (41, 41)
         patch_size = (224, 224)
+        logger.debug(f'Segmenting image into superpixels of size {sp_size}.')
+        logger.debug(f'Extracting patches of size {patch_size}.')
 
         def extract_patches(images, patch_size=patch_size, sp_size=sp_size):
             patches = tf.extract_image_patches(images=images,
@@ -472,6 +476,7 @@ class DeepConvolutionalNeuralFields(DepthMapNetwork):
 
     @with_scope('Result')
     def _convert_to_output(self, z, output_shape):
+        logger.debug(f'Preparing output')
         x = tf.sqrt(int(z.shape[1]) * output_shape[1] / output_shape[0])
         y = tf.cast(output_shape[0] / output_shape[1] * x, tf.int32)
         x = tf.cast(x, tf.int32)
@@ -481,6 +486,7 @@ class DeepConvolutionalNeuralFields(DepthMapNetwork):
 
     @with_scope('LossFunction')
     def _create_loss_part(self, target_superpixels, z, r):
+        logger.debug(f'Preparing loss')
         def mean(superpixel):
             return tf.reduce_mean(tf.reduce_mean(superpixel, 0), 0)
 
@@ -524,7 +530,11 @@ class DeepConvolutionalNeuralFields(DepthMapNetwork):
         target = tf.expand_dims(self.target, -1)
 
         # Network structure
-        (sp_in, pat_in, sp_tar, pat_tar) = self._segment(self.input, target)
+        logger.info('Creating network structure')
+        (sp_in, pat_in, sp_tar, pat_tar) = self._segment(input_im, target_im)
+        logger.debug(f'Superpixels input: {sp_in}')
+        logger.debug(f'Patches input: {pat_in}')
+
         z = self._create_unary_part(pat_in)
         r = self._create_pairwise_part(sp_in)
 
