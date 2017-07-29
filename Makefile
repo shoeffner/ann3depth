@@ -7,6 +7,8 @@ LOG_DIR := grid_logs
 
 # Grid parameters
 CONDAENV ?= asuckro-shoeffner-ann3depth
+PS_NODES ?= 1
+WORKERS ?= 1
 
 # Default training parameters
 NET ?= DeepConvolutionalNeuralFields
@@ -66,7 +68,12 @@ conda:
 # Submit a grid training job
 .PHONY: grid
 grid: ${LOG_DIR}
-	CONDAENV=${CONDAENV} NET=${NET} EPOCHS=${EPOCHS} BATCHSIZE=${BATCHSIZE} DATASETS=${DATASETS} CKPT_FREQ=${CKPT_FREQ} TIMEOUT=${TIMEOUT} CONT=${CONT} qsub ./tools/grid/train.sge
+	CONDAENV=${CONDAENV} NET=${NET} EPOCHS=${EPOCHS} BATCHSIZE=${BATCHSIZE} DATASETS=${DATASETS} CKPT_FREQ=${CKPT_FREQ} TIMEOUT=${TIMEOUT} CONT=${CONT} qsub ./tools/grid/simple_train.sge
+
+# Submit a grid training job
+.PHONY: distributed
+distributed: ${LOG_DIR}
+	PS_NODES=${PS_NODES} WORKERS=${WORKERS} CONDAENV=${CONDAENV} NET=${NET} EPOCHS=${EPOCHS} BATCHSIZE=${BATCHSIZE} DATASETS=${DATASETS} CKPT_FREQ=${CKPT_FREQ} TIMEOUT=${TIMEOUT} CONT=${CONT} qsub ./tools/grid/distributed_master.sge
 
 .PHONY: help
 help:

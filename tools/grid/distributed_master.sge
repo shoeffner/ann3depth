@@ -1,0 +1,20 @@
+#!/bin/bash
+#$ -N distributed_master
+#$ -l mem=150M
+#$ -cwd
+#$ -j y
+#$ -notify
+#$ -V
+#$ -o grid_logs/$JOB_ID.out
+
+echo I am: $(whoami)
+
+hosts=$(qstat -F h -U $(whoami) | tail -n +2 | awk -F= 'NR % 3 == 0 {print $2}')
+echo Available hosts: $hosts
+
+source activate $CONDAENV
+
+cluster_spec_path=$(qhost -F cuda_cores -h $hosts | python tools/grid/split_resources.py --workers $WORKERS --ps-nodes $PS_NODES $hosts)
+
+echo Storing cluster spec at $cluster_spec_path
+
