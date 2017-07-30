@@ -2,6 +2,7 @@ import argparse
 import itertools
 import json
 import os
+import subprocess
 import sys
 
 
@@ -22,7 +23,10 @@ def convert_memory(value):
 
 def parse_info_table(hostlist):
     result = []
-    for line in sys.stdin:
+    qhost = subprocess.run(['qhost', '-F', 'cuda_cores', '-h', *hostlist],
+                           stdout=subprocess.PIPE, encoding='utf-8',
+                           shell=True).stdout.splitlines()
+    for line in qhost:
         values = line.split()
         if values[0] in hostlist:
             result.append({
@@ -71,9 +75,18 @@ def prepare_output(workers, ps):
 
 def dump_cluster_spec(cluster_spec):
     job_id = os.environ.get('JOB_ID', 'local')
-    path = os.path.join('grid_logs', f'cluster_spec.{job_id}.json')
-    with open(path, 'w') as jf:
-        json.dump(cluster_spec, jf)
+    path = os.path.join('grid_logs', f'cluster_spec.{job_id}')
+
+    cluster_spec_copy = {'worker': [], 'ps': []}
+
+    with open(path + '.csv', 'w') as jf:
+        for k, v in cluster_spec.items():
+            for x in v:
+                jf.write(f"{x.replace(':', ',')},{k}\n")
+                cluster_spec_copy[k].append(f"localhost:{x.split(':')[1]}")
+
+    with open(path + '.json', 'w') as jf:
+        json.dump(cluster_spec_copy, jf)
     return path
 
 

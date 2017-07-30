@@ -1,20 +1,80 @@
 #!/bin/bash
-#$ -N distributed_master
+#$ -N a3d_keepalive
 #$ -l mem=150M
 #$ -cwd
 #$ -j y
 #$ -notify
 #$ -V
-#$ -o grid_logs/$JOB_ID.out
+#$ -o grid_logs/keepalive.$JOB_ID.out
 
-echo I am: $(whoami)
 
-hosts=$(qstat -F h -U $(whoami) | tail -n +2 | awk -F= 'NR % 3 == 0 {print $2}')
-echo Available hosts: $hosts
+KEEP_ALIVE_INTERVAL=10
+MEMORY_RATIO=0.01
+REPORT_FILE=grid_logs/done
 
+
+# Determine available hosts.
+hosts=($(qstat -f -F h -U $(whoami) | python tools/grid/extract_hosts.py))
+
+
+# We got enough hosts (or so we hope) so let's determine who will become a worker und who a ps node and store
+# a proper cluster spec.
 source activate $CONDAENV
+cluster_spec_path=$(python tools/grid/split_resources.py --workers $WORKERS --ps-nodes $PS_NODES ${hosts[@]})
 
-cluster_spec_path=$(qhost -F cuda_cores -h $hosts | python tools/grid/split_resources.py --workers $WORKERS --ps-nodes $PS_NODES $hosts)
+if [ $? -eq 0 ]; then
+    echo Stored real cluster spec at $cluster_spec_path.csv and localhost-ssh-fake as $cluster_spec_path.json
+else
+    echo Can\'t create cluster spec!
+    exit 1
+fi
 
-echo Storing cluster spec at $cluster_spec_path
 
+echo Starting processes...
+nodes=($(cut -f1 -d',' $cluster_spec_path.csv))
+ports=($(cut -f2 -d',' $cluster_spec_path.csv))
+jobtype=($(cut -f3 -d',' $cluster_spec_path.csv))
+count=0
+for node in "${nodes[@]}"; do
+    job=${jobtype[$count]}
+
+    # Calculate how much memory to request
+    availablememory=$(qhost -h $node -F mem | tail -n1 | cut -d' ' -f12 | cut -d= -f2)
+    memory=$(python tools/grid/calculate_memory.py $availablememory $MEMORY_RATIO)
+    param="-l mem=$memory"
+
+    # Calculate how many cuda_cores to request
+    if [ "$job" == "worker" ]; then
+        cores=$(qhost -h $node -F cuda_cores | tail -n1 | cut -d' ' -f12 | cut -d= -f2 | cut -d. -f1)
+        param="$param -l cuda=1 -l cuda_cores=$cores"
+    fi
+
+    # Submit job
+    echo Using $node as $job with parameters $param .
+    REPORT_FILE=$REPORT_FILE CLUSTER_SPEC=$cluster_spec_path JOB_TYPE=$job PS_NODES=${PS_NODES} WORKERS=${WORKERS} CONDAENV=${CONDAENV} NET=${NET} EPOCHS=${EPOCHS} BATCHSIZE=${BATCHSIZE} DATASETS=${DATASETS} CKPT_FREQ=${CKPT_FREQ} TIMEOUT=${TIMEOUT} CONT=${CONT} qsub -w w -l h=$node $param -N a3d_n${count}_${job} tools/grid/distributed_client.sge
+
+    (( count++ ))
+done
+echo All jobs submitted, idling now.
+
+
+dead=0
+while [ $dead -eq 0 ]; do
+    sleep $KEEP_ALIVE_INTERVAL
+    qstat | grep a3d_n > /dev/null # Still running nodes?
+    dead=$?
+done
+echo All jobs vanished from queue.
+
+
+# Check if any worker reported finishing and potentially restart.
+if [ -f "$REPORT_FILE" ]; then
+    echo Job done!
+    echo Removing report file...
+    rm $REPORT_FILE
+    echo Removing multiplexer files...
+    rm ~/.ssh/ann3d*
+else
+    echo "Resubmitting job."
+    PS_NODES=${PS_NODES} WORKERS=${WORKERS} CONDAENV=${CONDAENV} NET=${NET} EPOCHS=${EPOCHS} BATCHSIZE=${BATCHSIZE} DATASETS=${DATASETS} CKPT_FREQ=${CKPT_FREQ} TIMEOUT=${TIMEOUT} CONT=${CONT} qsub ./tools/grid/distributed_master.sge
+fi

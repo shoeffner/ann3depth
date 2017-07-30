@@ -1,0 +1,68 @@
+#!/bin/bash
+#$ -l mem=50M
+#$ -l h_rt=00:03:00
+#$ -cwd
+#$ -j y
+#$ -notify
+#$ -V
+#$ -o grid_logs/$JOB_ID.$HOSTNAME.out
+
+SSH_IDENTITY_FILE=${SSH_IDENTITY_FILE:-~/.ssh/ikw_rsa}
+SSH_CONTROL_PATH="-o ControlPath=~/.ssh/ann3d-$JOB_ID-%h:%p"
+
+nodes=($(cut -f1 -d',' $CLUSTER_SPEC.csv))
+ports=($(cut -f2 -d',' $CLUSTER_SPEC.csv))
+self=$(hostname)
+
+function sshtunnel {
+    params="$SSH_CONTROL_PATH -o ControlMaster=auto -o ControlPersist=10m -o ForwardAgent=yes -o ExitOnForwardFailure=yes"
+    if [ "$SSH_IDENTITY_FILE" != "" ]; then
+        params="$params -o IdentityFile=$SSH_IDENTITY_FILE"
+    fi
+    params="$params -f -N -L $2:localhost:$2 $1"
+    echo "Opening tunnel: ssh $params"
+    ssh $params
+}
+
+echo ----
+
+source activate $CONDAENV
+
+
+# open SSH tunnels
+count=0
+for node in "${nodes[@]}"; do
+    if [[ $node != *"$self"* ]]; then
+        sshtunnel $node ${ports[$count]}
+    fi
+    (( count++ ))
+done
+
+
+# Do something
+count=0
+for node in "${nodes[@]}"; do
+    if [[ $node == *"$self"* ]]; then
+        echo This is $JOB_TYPE with $node : ${ports[$count]} -- $(hostname)
+        if [[ "$JOB_TYPE" == "ps" ]]; then
+            python -m http.server ${ports[$count]}
+        else
+            sleep 30  # enough time for all servers to spin up
+            python tools/grid/request_ps.py
+        fi
+    fi
+    (( count++ ))
+done
+
+
+# close SSH tunnels
+count=0
+for node in "${nodes[@]}"; do
+    if [[ $node != *"$self"* ]]; then
+        ssh $SSH_CONTROL_PATH -O exit $node
+    fi
+    (( count++ ))
+done
+
+# Stop keep-alive process
+touch grid_logs/done
