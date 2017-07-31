@@ -9,6 +9,10 @@ LOG_DIR := grid_logs
 CONDAENV ?= asuckro-shoeffner-ann3depth
 PS_NODES ?= 1
 WORKERS ?= 1
+CLUSTER_PARAM ?=
+ifdef CLUSTER_SPEC
+	CLUSTER_PARAM = --cluster-spec=${CLUSTER_SPEC}
+endif
 
 # Default training parameters
 NET ?= DeepConvolutionalNeuralFields
@@ -29,8 +33,8 @@ START ?= 0
 LIMIT ?=
 
 SCRIPT := python3 src/ann3depth.py
-COMMON_PARAMETERS := --ckptdir=${CKPT_DIR} --tbdir=${TB_DIR} --network=${NET}
-TRAIN_PARAMETERS := --epochs=${EPOCHS} --batchsize=${BATCHSIZE} --ckptfreq=${CKPT_FREQ} --timeout=${TIMEOUT} ${CONT}
+COMMON_PARAMETERS := --ckptdir=${CKPT_DIR} --tbdir=${TB_DIR} --network=${NET} ${CLUSTER_PARAM}
+TRAIN_PARAMETERS := --train --epochs=${EPOCHS} --batchsize=${BATCHSIZE} --ckptfreq=${CKPT_FREQ} --timeout=${TIMEOUT} ${CONT}
 
 # Check if download is wanted, and if so, set dataset names
 # see http://stackoverflow.com/a/14061796/3004221
@@ -53,7 +57,7 @@ inspect: data
 # Trains the network
 .PHONY: train
 train: data
-	${SCRIPT} --train ${COMMON_PARAMETERS} ${TRAIN_PARAMETERS} ${DATASETS}
+	${SCRIPT} ${COMMON_PARAMETERS} ${TRAIN_PARAMETERS} ${DATASETS}
 
 # Reloads a checkpoint and continues training
 .PHONY: continue

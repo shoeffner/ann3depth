@@ -5,12 +5,15 @@
 #$ -j y
 #$ -notify
 #$ -V
-#$ -o grid_logs/keepalive.$JOB_ID.out
+#$ -o grid_logs/keepalive.$JOB_ID.$HOSTNAME.out
 
 
 KEEP_ALIVE_INTERVAL=10
 MEMORY_RATIO=0.01
 REPORT_FILE=grid_logs/done
+
+
+source activate $CONDAENV
 
 
 # Determine available hosts.
@@ -19,7 +22,6 @@ hosts=($(qstat -f -F h -U $(whoami) | python tools/grid/extract_hosts.py))
 
 # We got enough hosts (or so we hope) so let's determine who will become a worker und who a ps node and store
 # a proper cluster spec.
-source activate $CONDAENV
 cluster_spec_path=$(python tools/grid/split_resources.py --workers $WORKERS --ps-nodes $PS_NODES ${hosts[@]})
 
 if [ $? -eq 0 ]; then
@@ -76,5 +78,5 @@ if [ -f "$REPORT_FILE" ]; then
     rm ~/.ssh/ann3d*
 else
     echo "Resubmitting job."
-    PS_NODES=${PS_NODES} WORKERS=${WORKERS} CONDAENV=${CONDAENV} NET=${NET} EPOCHS=${EPOCHS} BATCHSIZE=${BATCHSIZE} DATASETS=${DATASETS} CKPT_FREQ=${CKPT_FREQ} TIMEOUT=${TIMEOUT} CONT=${CONT} qsub ./tools/grid/distributed_master.sge
+    PS_NODES=${PS_NODES} WORKERS=${WORKERS} CONDAENV=${CONDAENV} NET=${NET} EPOCHS=${EPOCHS} BATCHSIZE=${BATCHSIZE} DATASETS=${DATASETS} CKPT_FREQ=${CKPT_FREQ} TIMEOUT=${TIMEOUT} CONT=--cont make distributed
 fi
