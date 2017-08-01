@@ -101,6 +101,16 @@ if __name__ == '__main__':
 
     if args.job_name == 'ps':
         if server:
+            def handler(signum, frame):
+                logger.critical(f'Received signal {signal.Signals(signum).name}')
+                sys.exit('Shut down after receiving signal ' +
+                        f'{signal.Signals(signum).name}')
+
+            for s in [signal.SIGUSR1, signal.SIGUSR2, signal.SIGALRM,
+                      signal.SIGINT]:
+                signal.signal(s, handler)
+                logger.debug(f'Registered handler for {s.name}')
+
             server.join()
         else:
             logger.error(f'Server can not be initialized!')
