@@ -8,7 +8,7 @@
 
 SSH_IDENTITY_FILE=${SSH_IDENTITY_FILE:-~/.ssh/ikw_rsa}
 REPORT_FILE=${REPORT_FILE:-grid_logs/done}
-SSH_CONTROL_PATH="-o ControlPath=~/.ssh/ann3d-$JOB_ID-%h:%p"
+SSH_CONTROL_PATH="-o ControlPath=$TMPDIR/ann3d-$JOB_ID-%h:%p"
 
 
 nodes=($(cut -f1 -d',' $CLUSTER_SPEC.csv))
