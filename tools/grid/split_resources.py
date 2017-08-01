@@ -23,7 +23,8 @@ def convert_memory(value):
 
 def parse_info_table(hostlist):
     result = []
-    qhost = subprocess.run(['qhost', '-F', 'cuda_cores', '-h', *hostlist],
+    qhost = subprocess.run(' '.join(['qhost', '-F', 'cuda_cores',
+                            '-h cippy01', ','.join(hostlist)]),
                            stdout=subprocess.PIPE, encoding='utf-8',
                            shell=True).stdout.splitlines()
     for line in qhost:

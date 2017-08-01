@@ -9,7 +9,7 @@
 
 
 KEEP_ALIVE_INTERVAL=10
-MEMORY_RATIO=0.01
+MEMORY_RATIO=0.9
 REPORT_FILE=grid_logs/done
 
 
@@ -37,6 +37,9 @@ nodes=($(cut -f1 -d',' $cluster_spec_path.csv))
 ports=($(cut -f2 -d',' $cluster_spec_path.csv))
 jobtype=($(cut -f3 -d',' $cluster_spec_path.csv))
 count=0
+task_worker=0
+task_ps=0
+task_index=0
 for node in "${nodes[@]}"; do
     job=${jobtype[$count]}
 
@@ -49,11 +52,16 @@ for node in "${nodes[@]}"; do
     if [ "$job" == "worker" ]; then
         cores=$(qhost -h $node -F cuda_cores | tail -n1 | cut -d' ' -f12 | cut -d= -f2 | cut -d. -f1)
         param="$param -l cuda=1 -l cuda_cores=$cores"
+        task_index=$task_worker
+        (( task_worker++ ))
+    else
+        task_index=$task_ps
+        (( task_ps++ ))
     fi
 
     # Submit job
     echo Using $node as $job with parameters $param .
-    REPORT_FILE=$REPORT_FILE CLUSTER_SPEC=$cluster_spec_path JOB_TYPE=$job PS_NODES=${PS_NODES} WORKERS=${WORKERS} CONDAENV=${CONDAENV} NET=${NET} EPOCHS=${EPOCHS} BATCHSIZE=${BATCHSIZE} DATASETS=${DATASETS} CKPT_FREQ=${CKPT_FREQ} TIMEOUT=${TIMEOUT} CONT=${CONT} qsub -w w -l h=$node $param -N a3d_n${count}_${job} tools/grid/distributed_client.sge
+    REPORT_FILE=$REPORT_FILE CLUSTER_SPEC=$cluster_spec_path JOB_TYPE=$job TASK_INDEX=$task_index PS_NODES=$PS_NODES WORKERS=$WORKERS CONDAENV=$CONDAENV NET=$NET EPOCHS=$EPOCHS BATCHSIZE=$BATCHSIZE DATASETS=$DATASETS CKPT_FREQ=$CKPT_FREQ TIMEOUT=$TIMEOUT CONT=$CONT qsub -w w -l h=$node $param -N a3d_${job}_${task_index} tools/grid/distributed_client.sge
 
     (( count++ ))
 done
@@ -63,7 +71,7 @@ echo All jobs submitted, idling now.
 dead=0
 while [ $dead -eq 0 ]; do
     sleep $KEEP_ALIVE_INTERVAL
-    qstat | grep a3d_n > /dev/null # Still running nodes?
+    qstat | grep "a3d_[^k]" > /dev/null # Still running nodes?
     dead=$?
 done
 echo All jobs vanished from queue.

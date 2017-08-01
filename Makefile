@@ -9,10 +9,23 @@ LOG_DIR := grid_logs
 CONDAENV ?= asuckro-shoeffner-ann3depth
 PS_NODES ?= 1
 WORKERS ?= 1
-CLUSTER_PARAM ?=
+
 ifdef CLUSTER_SPEC
-	CLUSTER_PARAM = --cluster-spec=${CLUSTER_SPEC}
+	CLUSTER_PARAM1 = --cluster-spec=${CLUSTER_SPEC}
+else
+	CLUSTER_PARAM1 :=
 endif
+ifdef JOB_TYPE
+	CLUSTER_PARAM2 = --job-name=${JOB_TYPE}
+else
+	CLUSTER_PARAM2 :=
+endif
+ifdef TASK_INDEX
+	CLUSTER_PARAM3 = --task-index=${TASK_INDEX}
+else
+	CLUSTER_PARAM3 :=
+endif
+CLUSTER_PARAMS ?= ${CLUSTER_PARAM1} ${CLUSTER_PARAM2} ${CLUSTER_PARAM3}
 
 # Default training parameters
 NET ?= DeepConvolutionalNeuralFields
@@ -33,7 +46,7 @@ START ?= 0
 LIMIT ?=
 
 SCRIPT := python3 src/ann3depth.py
-COMMON_PARAMETERS := --ckptdir=${CKPT_DIR} --tbdir=${TB_DIR} --network=${NET} ${CLUSTER_PARAM}
+COMMON_PARAMETERS := --ckptdir=${CKPT_DIR} --tbdir=${TB_DIR} --network=${NET} ${CLUSTER_PARAMS}
 TRAIN_PARAMETERS := --train --epochs=${EPOCHS} --batchsize=${BATCHSIZE} --ckptfreq=${CKPT_FREQ} --timeout=${TIMEOUT} ${CONT}
 
 # Check if download is wanted, and if so, set dataset names
