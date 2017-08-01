@@ -82,9 +82,14 @@ class DepthMapNetwork:
             self.server = server
             self.task_index = task_index
 
+            greedy_strategy = tf.contrib.training.GreedyLoadBalancingStrategy(
+                self.cluster.num_tasks('ps'),
+                tf.contrib.training.byte_size_load_fn
+            )
             with tf.device(tf.train.replica_device_setter(
                             cluster=self.cluster,
                             worker_device=f'/job:worker/task:{self.task_index}',
+                            ps_strategy=greedy_strategy
                            )):
                 self.step = tf.train.create_global_step()
 
@@ -173,6 +178,13 @@ class DepthMapNetwork:
                                                 None)
 
         return init
+
+    def _partitioner(self, size=None, axis=0):
+        if self.cluster:
+            if not size:
+                size = self.cluster.num_tasks('ps')
+            return tf.fixed_size_partitioner(size, axis=axis)
+        return None
 
     def test(self, dataset):
         with tf.Session() as s:
@@ -348,27 +360,29 @@ class DeepConvolutionalNeuralFields(DepthMapNetwork):
 
     def _create_layers(self, name, layer_in, layers):
         for i, layer in enumerate(layers):
-            if layer['type'] == 'conv2d':
-                layer_in = tf.layers.conv2d(
-                    inputs=layer_in, filters=layer['filters'],
-                    kernel_size=layer['size'],
-                    padding='same', activation=layer['act'],
-                    name=f"{name.title()}Conv_{layer['size']}x{layer['size']}_{i}")
-            elif layer['type'] == 'pool':
-                layer_in = tf.layers.max_pooling2d(
-                    inputs=layer_in,
-                    pool_size=layer['pool_size'],
-                    strides=layer['strides'],
-                    name=f'{name.title()}Pool_{i}')
-            elif layer['type'] == 'fc':
-                layer_in = tf.layers.dense(inputs=layer_in,
-                                           units=layer['size'],
-                                           activation=layer['act'],
-                                           name=f'{name.title()}Dense_{i}')
-            elif layer['type'] == 'reshape':
-                layer_in = tf.reshape(tensor=layer_in,
-                                      shape=layer['shape'],
-                                      name=f'{name.title()}Reshape_{i}')
+            with tf.variable_scope(f'partition_unary_layer_{i}',
+                                   partitioner=self._partitioner()):
+                if layer['type'] == 'conv2d':
+                    layer_in = tf.layers.conv2d(
+                        inputs=layer_in, filters=layer['filters'],
+                        kernel_size=layer['size'],
+                        padding='same', activation=layer['act'],
+                        name=f"{name.title()}Conv_{layer['size']}x{layer['size']}_{i}")
+                elif layer['type'] == 'pool':
+                    layer_in = tf.layers.max_pooling2d(
+                        inputs=layer_in,
+                        pool_size=layer['pool_size'],
+                        strides=layer['strides'],
+                        name=f'{name.title()}Pool_{i}')
+                elif layer['type'] == 'fc':
+                    layer_in = tf.layers.dense(inputs=layer_in,
+                                            units=layer['size'],
+                                            activation=layer['act'],
+                                            name=f'{name.title()}Dense_{i}')
+                elif layer['type'] == 'reshape':
+                    layer_in = tf.reshape(tensor=layer_in,
+                                        shape=layer['shape'],
+                                        name=f'{name.title()}Reshape_{i}')
         return layer_in
 
     @make_template
@@ -401,9 +415,14 @@ class DeepConvolutionalNeuralFields(DepthMapNetwork):
     def _create_unary_part(self, patches):
         logger.debug(f'Creating unary part. Patches: {patches}')
         new_shape = [conv_dim(patches.shape[i]) for i in [1, 0, 2, 3, 4]]
-        net = tf.map_fn(self.unary_part, tf.reshape(patches, new_shape),
-                        name='UnaryConcat')
-        return tf.reshape(net, [-1, conv_dim(patches.shape[1]), 1])
+        with tf.variable_scope('partition_unary__concat',
+                               partitioner=self._partitioner()):
+            with tf.device('/cpu:0'):
+                net = tf.map_fn(self.unary_part, tf.reshape(patches, new_shape),
+                                name='UnaryConcat',
+                                parallel_iterations=1,
+                                swap_memory=True)
+            return tf.reshape(net, [-1, conv_dim(patches.shape[1]), 1])
 
     @with_scope('PairwisePart')
     def _create_pairwise_part(self, superpixels):
@@ -420,14 +439,16 @@ class DeepConvolutionalNeuralFields(DepthMapNetwork):
             q = tf.gather_nd(combination, [1])
             return self._similarity(p, q)
 
-        combinations = tf.map_fn(combine_pairwise, superpixels)
-        concat = tf.map_fn(lambda c: tf.map_fn(apply_similarity, c),
-                           combinations)
+        with tf.variable_scope('partition_comb_pairwise',
+                                partitioner=self._partitioner()):
+            combinations = tf.map_fn(combine_pairwise, superpixels)
+            concat = tf.map_fn(lambda c: tf.map_fn(apply_similarity, c),
+                            combinations)
 
-        new_shape = [conv_dim(concat.shape[i]) for i in [1, 0, 2, 3]]
-        net = tf.map_fn(self.pairwise_part, tf.reshape(concat, new_shape),
-                        name='PairwiseConcat')
-        return tf.reshape(net, [-1, conv_dim(concat.shape[1]), 1])
+            new_shape = [conv_dim(concat.shape[i]) for i in [1, 0, 2, 3]]
+            net = tf.map_fn(self.pairwise_part, tf.reshape(concat, new_shape),
+                            name='PairwiseConcat')
+            return tf.reshape(net, [-1, conv_dim(concat.shape[1]), 1])
 
     @with_scope('color_diff')
     def _similarity_color_diff(self, superpixel_p, superpixel_q):
@@ -479,15 +500,17 @@ class DeepConvolutionalNeuralFields(DepthMapNetwork):
         logger.debug(f'Extracting patches of size {patch_size}.')
 
         def extract_patches(images, patch_size=patch_size, sp_size=sp_size):
-            patches = tf.extract_image_patches(images=images,
-                                               ksizes=[1, *patch_size, 1],
-                                               strides=[1, *sp_size, 1],
-                                               rates=[1, 1, 1, 1],
-                                               padding='SAME')
-            return tf.map_fn(
-                lambda p:
-                    tf.reshape(p, (-1, *patch_size, int(images.shape[-1]))),
-                patches)
+            with tf.variable_scope('partition_extract',
+                                   partitioner=self._partitioner()):
+                patches = tf.extract_image_patches(images=images,
+                                                ksizes=[1, *patch_size, 1],
+                                                strides=[1, *sp_size, 1],
+                                                rates=[1, 1, 1, 1],
+                                                padding='SAME')
+                return tf.map_fn(
+                    lambda p:
+                        tf.reshape(p, (-1, *patch_size, int(images.shape[-1]))),
+                    patches)
         patches_in = extract_patches(input_images, patch_size, sp_size)
         superpixels_in = extract_patches(input_images, sp_size, sp_size)
         patches_target = extract_patches(target_images, patch_size, sp_size)
@@ -507,40 +530,42 @@ class DeepConvolutionalNeuralFields(DepthMapNetwork):
 
     @with_scope('LossFunction')
     def _create_loss_part(self, target_superpixels, z, r):
-        logger.debug(f'Preparing loss')
-        def mean(superpixel):
-            return tf.reduce_mean(tf.reduce_mean(superpixel, 0), 0)
+        with tf.variable_scope('partition_loss',
+                               partitioner=self._partitioner()):
+            logger.debug(f'Preparing loss')
+            def mean(superpixel):
+                return tf.reduce_mean(tf.reduce_mean(superpixel, 0), 0)
 
-        y = tf.map_fn(lambda pix: tf.map_fn(mean, pix), target_superpixels)
+            y = tf.map_fn(lambda pix: tf.map_fn(mean, pix), target_superpixels)
 
-        # y to z
-        yz = tf.reduce_sum(tf.squared_difference(y, z), 1)
+            # y to z
+            yz = tf.reduce_sum(tf.squared_difference(y, z), 1)
 
-        # Rpq
-        def combine_pairwise(superpixels):
-            indices = []
-            for i in range(superpixels.shape[0]):
-                for j in range(i + 1, superpixels.shape[0]):
-                    indices.append([[i], [j]])
-            return tf.gather_nd(superpixels, indices)
+            # Rpq
+            def combine_pairwise(superpixels):
+                indices = []
+                for i in range(superpixels.shape[0]):
+                    for j in range(i + 1, superpixels.shape[0]):
+                        indices.append([[i], [j]])
+                return tf.gather_nd(superpixels, indices)
 
-        def sq_diff(pair):
-            p = tf.gather_nd(pair, [0])
-            q = tf.gather_nd(pair, [1])
-            return (p - q) * (p - q)
+            def sq_diff(pair):
+                p = tf.gather_nd(pair, [0])
+                q = tf.gather_nd(pair, [1])
+                return (p - q) * (p - q)
 
-        y_combs = tf.map_fn(combine_pairwise, y)
-        y_diffs = tf.map_fn(
-            lambda batch: tf.map_fn(
-                sq_diff, batch), y_combs)
-        rpq = 0.5 * tf.reduce_sum(y_diffs * r, 1)
+            y_combs = tf.map_fn(combine_pairwise, y)
+            y_diffs = tf.map_fn(
+                lambda batch: tf.map_fn(
+                    sq_diff, batch), y_combs)
+            rpq = 0.5 * tf.reduce_sum(y_diffs * r, 1)
 
-        # E(y, x)
-        energy = yz + rpq
+            # E(y, x)
+            energy = yz + rpq
 
-        # Neg log-likelihood
-        exp_energy = tf.exp(-energy)
-        return -tf.log(exp_energy / tf.cumsum(exp_energy))
+            # Neg log-likelihood
+            exp_energy = tf.exp(-energy)
+            return -tf.log(exp_energy / tf.cumsum(exp_energy))
 
     @DepthMapNetwork.setup
     def __init__(self, input_shape, output_shape):
@@ -566,7 +591,9 @@ class DeepConvolutionalNeuralFields(DepthMapNetwork):
 
         # loss function, optimizer
         self.loss = self._create_loss_part(sp_tar, z, r)
-        self.optimizer = tf.train.AdamOptimizer(
-                            learning_rate=0.001,
-                            epsilon=1.0
-                         ).minimize(self.loss, self.step)
+        with tf.variable_scope('partition_optimizer',
+                               partitioner=self._partitioner()):
+            self.optimizer = tf.train.AdamOptimizer(
+                                learning_rate=0.001,
+                                epsilon=1.0
+                            ).minimize(self.loss, self.step)
