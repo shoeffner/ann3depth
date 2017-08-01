@@ -1,7 +1,10 @@
 import argparse
+import json
 import logging
 import logging.config
 import signal
+
+import tensorflow as tf
 
 import data
 import networks
@@ -22,11 +25,13 @@ def test_network(*, network, datasets, samples, checkpoints,
 
 def train_network(*, network, epochs, batchsize, datasets, samples,
                   checkpoints, ckptfreq, tensorboard, cont,
+                  cluster=None, server=None, task_index=0,
                   **unused_catch_kwargs):
     dataset_train, dataset_test = data.load(dataset=datasets, samples=samples)
     network = network(dataset_train[0].img.shape, dataset_train[0].depth.shape,
                       ckptdir=checkpoints, ckptfreq=ckptfreq,
-                      tbdir=tensorboard, cont=cont)
+                      tbdir=tensorboard, cont=cont,
+                      cluster=cluster, server=server, task_index=task_index)
     network.train(dataset_train, dataset_test, epochs, batchsize)
 
 
@@ -56,6 +61,12 @@ def parse_args():
                         help='Tensorboard directory')
     parser.add_argument('--timeout', '-k', default=4200, type=int,
                         help='The time after which the process dies.')
+    parser.add_argument('--cluster-spec', default='', type=str,
+                        help='The path to the cluster specification json.')
+    parser.add_argument('--job-name', default='worker', type=str,
+                        help='"worker" or "ps" for distributed computations.')
+    parser.add_argument('--task-index', default=0, type=int,
+                        help='Task index for distributed computations.')
     return parser.parse_args()
 
 
@@ -76,13 +87,34 @@ if __name__ == '__main__':
     signal.alarm(args.timeout)
     logger.info(f'Killing job in {args.timeout} seconds.')
 
-    args.train(network=getattr(networks, args.network),
-               epochs=args.epochs,
-               batchsize=args.batchsize,
-               datasets=args.datasets,
-               samples=maybe_int(args.samples),
-               checkpoints=args.ckptdir,
-               ckptfreq=args.ckptfreq,
-               tensorboard=args.tbdir,
-               cont=args.cont or (args.train == test_network)
-               )
+    cluster = None
+    server = None
+    if args.cluster_spec:
+        logger.info(f'Using cluster spec from {args.cluster_spec}')
+        with open(args.cluster_spec, 'r') as jf:
+            cluster_spec = json.load(jf)
+        cluster = tf.train.ClusterSpec(cluster_spec)
+        logger.info(f'This is a {args.job_name} with task {args.task_index}')
+        server = tf.train.Server(cluster,
+                                 job_name=args.job_name,
+                                 task_index=args.task_index)
+
+    if args.job_name == 'ps':
+        if server:
+            server.join()
+        else:
+            logger.error(f'Server can not be initialized!')
+    else:
+        args.train(network=getattr(networks, args.network),
+                   epochs=args.epochs,
+                   batchsize=args.batchsize,
+                   datasets=args.datasets,
+                   samples=maybe_int(args.samples),
+                   checkpoints=args.ckptdir,
+                   ckptfreq=args.ckptfreq,
+                   tensorboard=args.tbdir,
+                   cont=args.cont or (args.train == test_network),
+                   cluster=cluster,
+                   server=server,
+                   task_index=args.task_index
+                   )

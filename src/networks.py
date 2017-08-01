@@ -70,7 +70,7 @@ class DepthMapNetwork:
     def setup(__init__):
         def init(self, input_shape, output_shape, *,
                  ckptdir='checkpoints', ckptfreq=50, tbdir='tb_logs',
-                 cont=False):
+                 cont=False, cluster=None, server=None, task_index=0):
             self.ckpt_path = str(os.path.join('.', ckptdir,
                                               f'{type(self).__name__}'))
             self.ckpt = tf.train.latest_checkpoint(os.path.join('.', ckptdir))
@@ -78,30 +78,36 @@ class DepthMapNetwork:
 
             self.cont = cont
 
-            self.graph = tf.Graph()
-            with self.graph.as_default():
+            self.cluster = cluster
+            self.server = server
+            self.task_index = task_index
+
+            with tf.device(tf.train.replica_device_setter(
+                            cluster=self.cluster,
+                            worker_device=f'/job:worker/task:{self.task_index}',
+                           )):
                 self.step = tf.train.create_global_step()
 
                 self.input = tf.placeholder(tf.float32,
                                             shape=(None, ) + input_shape,
                                             name='input')
                 self.target = tf.placeholder(tf.float32,
-                                             shape=(None, ) + output_shape,
-                                             name='target')
+                                            shape=(None, ) + output_shape,
+                                            name='target')
 
                 with tf.name_scope('Warnings'):
                     self.optimizer = tf.Print(
                         self.input, [''], 'No self.optimizer implemented', 1)
                     self.output = tf.Print(self.input, [''],
-                                           'No self.output implemented', 1)
+                                        'No self.output implemented', 1)
                     self.loss = tf.Print(self.input, [''],
-                                         'No self.loss implemented', 1)
+                                        'No self.loss implemented', 1)
 
                 __init__(self, input_shape, output_shape)
 
                 (self.epoch_loss,
-                 self.epoch_loss_update,
-                 self.epoch_loss_reset) = create_reset_metric(
+                self.epoch_loss_update,
+                self.epoch_loss_reset) = create_reset_metric(
                     tf.contrib.metrics.streaming_mean_squared_error,
                     'epoch_loss',
                     predictions=self.output,
@@ -111,32 +117,38 @@ class DepthMapNetwork:
                     self.summary_loss_train = tf.summary.scalar('train',
                                                                 self.loss)
                     self.summary_loss_test = tf.summary.scalar('test',
-                                                               self.epoch_loss)
+                                                            self.epoch_loss)
 
                 with tf.name_scope('train_img'):
                     self.summary_input_train = tf.summary.image(
-                        'input', self.input)
+                        'input', self.input,
+                        collections=[])
                     self.summary_output_train = tf.summary.image(
-                        'output', self.output)
+                        'output', self.output,
+                        collections=[])
                     self.summary_target_train = tf.summary.image(
-                        'target', tf.expand_dims(self.target, -1))
+                        'target', tf.expand_dims(self.target, -1),
+                        collections=[])
 
                 with tf.name_scope('test_img'):
                     self.summary_input_test = tf.summary.image(
-                        'input', self.input)
+                        'input', self.input,
+                        collections=[])
                     self.summary_output_test = tf.summary.image(
-                        'output', self.output)
+                        'output', self.output,
+                        collections=[])
                     self.summary_target_test = tf.summary.image(
-                        'target', tf.expand_dims(self.target, -1))
+                        'target', tf.expand_dims(self.target, -1),
+                        collections=[])
 
                 self.summary_train = tf.summary.merge(
                     [self.summary_input_train,
-                     self.summary_output_train,
-                     self.summary_target_train])
+                    self.summary_output_train,
+                    self.summary_target_train])
                 self.summary_test = tf.summary.merge([self.summary_input_test,
-                                                      self.summary_output_test,
-                                                      self.summary_target_test])
-                self.saver = tf.train.Saver()
+                                                    self.summary_output_test,
+                                                    self.summary_target_test])
+                self.saver = tf.train.Saver(sharded=True)
 
             if self.cont:  # Select old filewriter path
                 try:
@@ -156,14 +168,14 @@ class DepthMapNetwork:
 
             logger.info(f'FileWriter writes to {filewriter_path}.')
             self.tb_log = tf.summary.FileWriter(filewriter_path,
-                                                self.graph
+                                                tf.get_default_graph()
                                                 if not self.cont else
                                                 None)
 
         return init
 
     def test(self, dataset):
-        with tf.Session(graph=self.graph) as s:
+        with tf.Session() as s:
             s.run(tf.global_variables_initializer())
             if self.cont:
                 self.saver.restore(s, self.ckpt)
@@ -181,10 +193,19 @@ class DepthMapNetwork:
 
     def train(self, dataset_train, dataset_test, epochs, batchsize):
         start = time.time()
-        with tf.Session(graph=self.graph) as s:
-            s.run(tf.global_variables_initializer())
-            if self.cont:
-                self.saver.restore(s, self.ckpt)
+        if self.server:
+            session = tf.train.MonitoredTrainingSession(
+                master=self.server.target,
+                is_chief=self.task_index == 0,
+            )
+        else:
+            session = tf.Session()
+            with session as s:
+                s.run(tf.global_variables_initializer())
+                if self.cont:
+                    self.saver.restore(s, self.ckpt)
+
+        with session as s:
             step = s.run(self.step)
             start_epoch = 1 + math.ceil(step / (len(dataset_train) / batchsize))
             self.__register_kill_handlers(s)
@@ -528,6 +549,9 @@ class DeepConvolutionalNeuralFields(DepthMapNetwork):
 
         # Inputs
         target = tf.expand_dims(self.target, -1)
+
+        input_im = self.input
+        target_im = target
 
         # Network structure
         logger.info('Creating network structure')
