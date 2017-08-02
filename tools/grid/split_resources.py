@@ -6,6 +6,9 @@ import subprocess
 import sys
 
 
+PS_PORT = 5002
+WORKER_PORT = 5001
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description='Determines how to distribute tensorflow on the grid jobs.'
@@ -66,10 +69,9 @@ def split_hosts(hosts, workers, ps):
 
 def prepare_output(workers, ps):
     cluster_spec = {'worker': [], 'ps': []}
-    start_port = 7100
-    for worker, port in zip(workers, itertools.count(start_port)):
+    for worker, port in zip(workers, itertools.repeat(WORKER_PORT)):
         cluster_spec['worker'].append(f"{worker['host']}:{port}")
-    for p, port in zip(ps, itertools.count(port + 1)):
+    for p, port in zip(ps, itertools.repeat(PS_PORT)):
         cluster_spec['ps'].append(f"{p['host']}:{port}")
     return cluster_spec
 
@@ -78,16 +80,13 @@ def dump_cluster_spec(cluster_spec):
     job_id = os.environ.get('JOB_ID', 'local')
     path = os.path.join('grid_logs', f'cluster_spec.{job_id}')
 
-    cluster_spec_copy = {'worker': [], 'ps': []}
-
-    with open(path + '.csv', 'w') as jf:
+    with open(path + '.csv', 'w') as cf:
         for k, v in cluster_spec.items():
             for x in v:
-                jf.write(f"{x.replace(':', ',')},{k}\n")
-                cluster_spec_copy[k].append(f"localhost:{x.split(':')[1]}")
+                cf.write(f"{x.replace(':', ',')},{k}\n")
 
     with open(path + '.json', 'w') as jf:
-        json.dump(cluster_spec_copy, jf)
+        json.dump(cluster_spec, jf)
     return path
 
 

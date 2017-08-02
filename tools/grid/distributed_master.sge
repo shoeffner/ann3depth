@@ -25,7 +25,7 @@ hosts=($(qstat -f -F h -U $(whoami) | python tools/grid/extract_hosts.py))
 cluster_spec_path=$(python tools/grid/split_resources.py --workers $WORKERS --ps-nodes $PS_NODES ${hosts[@]})
 
 if [ $? -eq 0 ]; then
-    echo Stored real cluster spec at $cluster_spec_path.csv and localhost-ssh-fake as $cluster_spec_path.json
+    echo Stored cluster spec as $cluster_spec_path.csv and  as $cluster_spec_path.json
 else
     echo Can\'t create cluster spec!
     exit 1

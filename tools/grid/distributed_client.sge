@@ -6,59 +6,21 @@
 #$ -o grid_logs/$JOB_ID.$HOSTNAME.out
 
 
-SSH_IDENTITY_FILE=${SSH_IDENTITY_FILE:-~/.ssh/ikw_rsa}
 REPORT_FILE=${REPORT_FILE:-grid_logs/done}
-SSH_CONTROL_PATH="-o ControlPath=$TMPDIR/ann3d-$JOB_ID-%h:%p"
-
 
 nodes=($(cut -f1 -d',' $CLUSTER_SPEC.csv))
 ports=($(cut -f2 -d',' $CLUSTER_SPEC.csv))
 SELF=$(hostname)
 
-
-function sshtunnel {
-    params="$SSH_CONTROL_PATH -o ControlMaster=auto -o ControlPersist=10m -o ForwardAgent=yes -o ExitOnForwardFailure=yes"
-    if [ "$SSH_IDENTITY_FILE" != "" ]; then
-        params="$params -o IdentityFile=$SSH_IDENTITY_FILE"
-    fi
-    params="$params -f -N -L $2:localhost:$2 $1"
-    echo "Opening tunnel: ssh $params"
-    ssh $params
-}
-
-
 echo =============
 echo ------------- $SELF -------------
 echo =============
 
-
 source activate $CONDAENV
-
-# open SSH tunnels
-count=0
-for node in "${nodes[@]}"; do
-    if [[ $node != *"$SELF"* ]]; then
-        sshtunnel $node ${ports[$count]}
-    else
-        MY_NODE=$node
-        MY_PORT=${ports[$count]}
-    fi
-    (( count++ ))
-done
-echo This is $JOB_TYPE with $MY_NODE : $MY_PORT -- $SELF
 
 # Train
 CLUSTER_SPEC="$CLUSTER_SPEC.json" JOB_TYPE=$JOB_TYPE TASK_INDEX=$TASK_INDEX CONDAENV=$CONDAENV NET=$NET EPOCHS=$EPOCHS BATCHSIZE=$BATCHSIZE DATASETS=$DATASETS CKPT_FREQ=$CKPT_FREQ TIMEOUT=$TIMEOUT CONT=$CONT make train
 success=$?
-
-# close SSH tunnels
-count=0
-for node in "${nodes[@]}"; do
-    if [[ $node != *"$SELF"* ]]; then
-        ssh $SSH_CONTROL_PATH -O exit $node
-    fi
-    (( count++ ))
-done
 
 # Stop keep-alive process on success
 if [ $success -eq 0 ]; then
