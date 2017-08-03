@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 CONDAENV=${CONDAENV-asuckro-shoeffner-ann3depth-env}
 
