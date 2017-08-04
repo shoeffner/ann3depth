@@ -1,61 +1,59 @@
 # ANN for depth map estimations
 
+This project originally aimed at creating depth maps for single monocular images. During the process of the development it became a study on how to run TensorFlow distributed on the Sun Grid Engine to achieve computations of deep networks.
+
+
+## Set up
+
 Requires Python 3.6+.
 
-`make`...
-- `install`: Install python requirements.
-- `datasets`: List available datasets.
-- `download [key ...]`: Download datasets for keys. Use `key=all` to download all.
-- `smart`: Create 1-page SMART goals presentation.
-- `doc`: Compile documentation.
+1. Run `make install` to install the python requirements.
+2. If you don't want the data to be stored in ./data, set the environment variable DATA\_DIR: `export DATA_DIR=./your/path/here`.
+3. Run `make download make3d1 make3d2 nyu`, followed by `make preprocess make3d1 make3d2 nyu`. Check below (or the Makefile) for parameters for the preprocessing.
+4. If you don't need the original files you can just run `make convert make3d1 make3d2 nyu` to convert all data to [TFRecords](https://www.tensorflow.org/api_guides/python/python_io). If you still need the originals, make a copy of them. (This might change in the future.)
 
-Examples:
+## Training
 
-```
-make install
-make datasets
-make download make3d1
-make download make3d2 nyu
-make download all
-make preprocess nyu
-make smart
-make doc
-```
-
-
-# Grid computations
-
-To perform grid computations we use the Sun Grid Engine and anaconda.
-
-## Setup
-
-To setup the conda environment, run `make conda` on your grid root node. This
-creates a conda environment named `asuckro-shoeffner-ann3depth` which installs
-all packages. If you want to use a different environment name, always set the
-environment variable `CONDAENV`.
-
-## Learning
-
-In the `tools/grid` directory you can find the `gridtrain.sge`. It's a
-relatively generic file and uses mostly environment variables for parameter
-adjustments.
-
-You can start a grid job by running
+### General training
 
 ```
-make grid
+usage: ann3depth.py [-h] [--model MODEL] [--steps STEPS]
+                    [--batchsize BATCHSIZE] [--ckptdir CKPTDIR]
+                    [--ckptfreq CKPTFREQ] [--datadir DATADIR] [--cont]
+                    [--timeout TIMEOUT] [--cluster-spec CLUSTER_SPEC]
+                    [--job-name JOB_NAME] [--task-index TASK_INDEX]
+                    [datasets [datasets ...]]
+
+positional arguments:
+  datasets              The datasets to use.
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --model MODEL, -m MODEL
+                        Enter a model name.
+  --steps STEPS, -s STEPS
+                        Total steps
+  --batchsize BATCHSIZE, -b BATCHSIZE
+                        Batchsize
+  --ckptdir CKPTDIR, -p CKPTDIR
+                        Checkpoint directory
+  --ckptfreq CKPTFREQ, -f CKPTFREQ
+                        Create a checkpoint every N seconds.
+  --datadir DATADIR, -d DATADIR
+                        The data directory containing the datasets.
+  --cont, -c            Continue from checkpoint
+  --timeout TIMEOUT, -k TIMEOUT
+                        The time after which the process dies.
+  --cluster-spec CLUSTER_SPEC
+                        The path to the cluster specification json.
+  --job-name JOB_NAME   "worker" or "ps" for distributed computations.
+  --task-index TASK_INDEX
+                        Task index for distributed computations.
 ```
 
-You can change the following parameters:
 
-- CONDAENV: the conda environment to use (important if you changed the setup step)
-- NET: The network to train (e.g. `DownsampleNetwork`)
-- EPOCHS: The number of epochs (Default: 500)
-- BATCHSIZE: The number of images per batch (Default: 32)
-- DATASETS: The datasets to learn (Default: make3d1)
+### Local training
 
-An example run for the DownsampleNetwork could be:
 
-```
-NET=DownsampleNetwork BATCHSIZE=8 make grid
-```
+### Distributed training
+
