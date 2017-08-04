@@ -41,7 +41,7 @@ def main():
         logger.info(f'Starting {args.job_name} job.')
 
         logger.info(f'Continue? {args.cont}.')
-        ckptdir = str(os.path.join('.', args.ckptdir, args.model))
+        ckptdir = determine_checkpoint_dir(args.ckptdir, args.model, args.cont)
         logger.info(f'Checkpoint dir is {ckptdir}.')
 
         logger.info(f'Setting up replica settings.')
@@ -62,7 +62,8 @@ def main():
 
         logger.info(f'Loading model {args.model}.')
         with tf.device(device_setter):
-            model_train_op = getattr(models, args.model)()
+            images, depths = data.inputs(args.datasets, args.batchsize)
+            model_train_op = getattr(models, args.model)(images, depths)
 
         logger.info('Starting session.')
         with tf.train.MonitoredTrainingSession(
@@ -82,8 +83,9 @@ def main():
             if args.task_index == 0:
                 logger.info('Setting up signal handlers.')
                 should_stop = handle_stop(session, logger)
-                logger.info(f'Starting alarm with a {args.timeout} s timeout.')
-                signal.alarm(args.timeout)
+                if args.job_name != 'local':
+                    logger.info(f'Starting alarm: {args.timeout} s timeout.')
+                    signal.alarm(args.timeout)
             else:
                 should_stop = session.should_stop
 
@@ -105,10 +107,19 @@ def handle_stop(session, logger):
         signal.signal(s, signal_handler)
     return lambda: stop_request or not session or session.should_stop()
 
+def determine_checkpoint_dir(ckptdir, model, cont=False):
+    ckptdir = os.path.join(ckptdir, model)
+    try:
+        runs = os.listdir(ckptdir)
+    except FileNotFoundError:
+        runs = []
+    num = len(runs) - (1 if cont and runs else 0)
+    return os.path.join(ckptdir, str(num))
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('datasets', nargs='*',
-                        default=['make3d1', 'make3d2'],
+                        default=['nyu'],
                         help='The datasets to use.')
     parser.add_argument('--model', '-m', default='', type=str,
                         help='Enter a model name.')
