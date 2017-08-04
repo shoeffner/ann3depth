@@ -45,25 +45,27 @@ def main():
         logger.info(f'Checkpoint dir is {ckptdir}.')
 
         logger.info(f'Setting up replica settings.')
-        greedy_strategy = tf.contrib.training.GreedyLoadBalancingStrategy(
-            cluster_spec.get('ps', 0),
-            tf.contrib.training.byte_size_load_fn
-        )
+        ps_strategy = None
+        if cluster_spec.get('ps'):
+            ps_strategy = tf.contrib.training.GreedyLoadBalancingStrategy(
+                len(cluster_spec['ps']),
+                tf.contrib.training.byte_size_load_fn
+            )
         device_setter = tf.train.replica_device_setter(
             cluster=cluster,
             worker_device=f'/job:{args.job_name}/task:{args.task_index}',
-            ps_strategy=greedy_strategy
+            ps_strategy=ps_strategy
         )
-
-        logger.info(f'Setting up hooks.')
-        hooks = [
-            tf.train.StopAtStepHook(last_step=args.steps)
-        ]
 
         logger.info(f'Loading model {args.model}.')
         with tf.device(device_setter):
             images, depths = data.inputs(args.datasets, args.batchsize)
             model_train_op = getattr(models, args.model)(images, depths)
+
+        logger.info(f'Setting up hooks.')
+        hooks = [
+            tf.train.StopAtStepHook(last_step=args.steps)
+        ]
 
         logger.info('Starting session.')
         with tf.train.MonitoredTrainingSession(

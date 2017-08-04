@@ -5,6 +5,7 @@ import tensorflow as tf
 
 import tfhelper
 
+
 def _read(queue):
     reader = tf.TFRecordReader()
     _, record = reader.read(queue)
@@ -23,7 +24,6 @@ def _read(queue):
     image = tf.reshape(image, [480, 640, 3])
     depth = tf.reshape(depth, [480, 640, 1])
     return image, depth
-
 
 
 @tfhelper.with_scope('input')

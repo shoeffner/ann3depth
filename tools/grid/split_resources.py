@@ -85,6 +85,11 @@ def dump_cluster_spec(cluster_spec):
             for x in v:
                 cf.write(f"{x.replace(':', ',')},{k}\n")
 
+    # Clean up before dumping the json
+    if not cluster_spec['worker']:
+        del cluster_spec['worker']
+    if not cluster_spec['ps']:
+        del cluster_spec['ps']
     with open(path + '.json', 'w') as jf:
         json.dump(cluster_spec, jf)
     return path

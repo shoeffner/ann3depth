@@ -172,3 +172,6 @@ ${DATA_DIR}:
 
 ${LOG_DIR}:
 	@mkdir -p ${LOG_DIR}
+
+${CKPT_DIR}:
+	@mkdir -p ${CKPT_DIR}
