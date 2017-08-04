@@ -27,7 +27,7 @@ D_WIDTH = int(os.environ.get('DWIDTH', D_HEIGHT * WIDTH // HEIGHT))
 
 START = int(os.environ.get('START', 0))
 try:
-    LIMIT = os.environ.get('LIMIT')
+    LIMIT = int(os.environ.get('LIMIT'))
 except ValueError:
     LIMIT = None
 
@@ -63,7 +63,7 @@ def __empty_dirs_or_fail(directories):
 
 def __process_make3d1(path_train, path_test):
     """Converts data of make3d1."""
-    path = os.path.join('data', 'make3d1', 'unpacked')
+    path = os.path.join(os.environ['DATA_DIR'], 'make3d1', 'unpacked')
     depth_path = [os.path.join(path, d) for d in ['Train400Depth',
                                                   'Test134Depth']]
     img_path = [os.path.join(path, d) for d in ['Train400Img',
@@ -102,7 +102,7 @@ def __process_make3d1(path_train, path_test):
 
 def __process_make3d2(path_train, path_test):
     """Converts data of make3d2. Needs to perform a rotation."""
-    path = os.path.join('data', 'make3d2', 'unpacked')
+    path = os.path.join(os.environ['DATA_DIR'], 'make3d2', 'unpacked')
 
     depth_path = [os.path.join(path, d) for d in ['Dataset3_Depths',
                                                   'Dataset2_Depths']]
@@ -145,7 +145,8 @@ def __process_nyu(path_train, path_test):
 
     train_images = 5
 
-    path = os.path.join('data', 'nyu', 'unpacked', 'nyu_depth_v2_labeled.mat')
+    path = os.path.join(os.environ['DATA_DIR'], 'nyu', 'unpacked',
+                        'nyu_depth_v2_labeled.mat')
 
     __empty_dirs_or_fail(target_path)
 
@@ -192,8 +193,8 @@ def main():
         'nyu': __process_nyu,
     }
 
-    path_train = os.path.join('data', 'train')
-    path_test = os.path.join('data', 'test')
+    path_train = os.path.join(os.environ['DATA_DIR'], 'train')
+    path_test = os.path.join(os.environ['DATA_DIR'], 'test')
     for k in processors:
         try:
             os.makedirs(os.path.join(path_train, k), 0o755)

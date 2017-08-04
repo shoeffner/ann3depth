@@ -153,7 +153,7 @@ def download_file(url_path):
 
 def download_dataset(dataset):
     fn = lambda url: os.path.join(
-        'data', dataset.key, 'raw', os.path.basename(url))
+        os.environ['DATA_DIR'], dataset.key, 'raw', os.path.basename(url))
     with Pool(4) as pool:
         results = pool.map(download_file,
                            [(url, fn(url)) for url in dataset.file_urls])
@@ -161,7 +161,7 @@ def download_dataset(dataset):
     print(*results, sep='\n\t')
 
     if results:
-        unpack_dataset(os.path.join('data', dataset.key, 'raw'))
+        unpack_dataset(os.path.join(os.environ['DATA_DIR'], dataset.key, 'raw'))
 
 
 def download_datasets(datasets):

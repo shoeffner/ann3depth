@@ -1,7 +1,7 @@
 # Default directory parameters
-OUT_DIR := build
-DATA_DIR ?= data
-LOG_DIR := grid_logs
+OUT_DIR := ./build
+DATA_DIR ?= ./data
+LOG_DIR := ./grid_logs
 TB_PORT ?= 5003
 
 # Grid parameters
@@ -109,27 +109,22 @@ datasets:
 # download data sets and extract them
 .PHONY: download
 download: ${DATA_DIR}
-	python3 tools/data_downloader.py $(DATASETS)
+	DATA_DIR=${DATA_DIR} python3 tools/data_downloader.py $(DATASETS)
 
 # preprocess data sets and extract them
 .PHONY: preprocess
-preprocess: download ${DATA_DIR}
-	WIDTH=${WIDTH} HEIGHT=${HEIGHT} DHEIGHT=${DHEIGHT} DWIDTH=${DWIDTH} FORCE=${FORCE} START=${START} LIMIT=${LIMIT} python3 tools/data_preprocessor.py $(DATASETS)
+preprocess: ${DATA_DIR}
+	DATA_DIR=${DATA_DIR} WIDTH=${WIDTH} HEIGHT=${HEIGHT} DHEIGHT=${DHEIGHT} DWIDTH=${DWIDTH} FORCE=${FORCE} START=${START} LIMIT=${LIMIT} python3 tools/data_preprocessor.py $(DATASETS)
 
 
 # convert to tf records
 .PHONY: convert
-convert: #preprocess
-	python3 tools/data_tf_converter.py ${DATASETS} --del_raw
-
-# inspect samples
-.PHONY: browse
-browse:
-	PYTHONPATH=src python3 src/visualize/dataviewer.py
+convert: ${DATA_DIR}
+	DATA_DIR=${DATA_DIR} python3 tools/data_tf_converter.py ${DATASETS} --del_raw
 
 # Opens up tensorboard for inspection of graphs and summaries
 .PHONY: tb
-tb:
+tb: ${CKPT_DIR}
 	tensorboard --logdir=${CKPT_DIR} --host=0.0.0.0 --port=${TB_PORT}
 
 

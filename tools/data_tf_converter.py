@@ -25,14 +25,16 @@ def main():
     for dataset in datasets:
         for dir in ['test', 'train']:
             with tf.python_io.TFRecordWriter(
-                        os.path.join('.', 'data', dataset, dir + '.tfrecords')
+                        os.path.join(os.environ['DATA_DIR'],
+                                     dataset,
+                                     dir + '.tfrecords')
                     ) as writer:
-                directory = os.path.join('.', 'data', dir, dataset)
+                directory = os.path.join(os.environ['DATA_DIR'], dir, dataset)
                 depth_paths = glob.glob(os.path.join(directory, '*-depth.png'))
                 for depth_path in depth_paths:
                     image_path = depth_path[:-9] + 'image.png'
-                    depth_img = smisc.imread(depth_path).astype(np.float32) / 255
-                    img = smisc.imread(image_path).astype(np.float32) / 255
+                    depth_img = smisc.imread(depth_path).astype(np.float32) / 255. - .5
+                    img = smisc.imread(image_path).astype(np.float32) / 255. - .5
                     name = os.path.splitext(os.path.basename(depth_path))[0][:-6]
                     if len(depth_img.shape) < 3:
                         depth_img = np.expand_dims(depth_img, -1)
