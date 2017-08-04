@@ -62,13 +62,18 @@ ifeq (preprocess,$(firstword $(MAKECMDGOALS)))
     $(eval $(DATASETS):;@:)
 endif
 
+# Check if convert is wanted, and if so, set dataset names
+ifeq (convert,$(firstword $(MAKECMDGOALS)))
+    DATASETS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+    $(eval $(DATASETS):;@:)
+endif
 
 
 ####### TRAINING ##########
 
 # Trains the network
 .PHONY: train
-train: data
+train: ${DATA_DIR}
 	${SCRIPT} ${COMMON_PARAMETERS} ${TRAIN_PARAMETERS} ${DATASETS}
 
 # Reloads a checkpoint and continues training
@@ -116,11 +121,10 @@ download: ${DATA_DIR}
 preprocess: ${DATA_DIR}
 	DATA_DIR=${DATA_DIR} WIDTH=${WIDTH} HEIGHT=${HEIGHT} DHEIGHT=${DHEIGHT} DWIDTH=${DWIDTH} FORCE=${FORCE} START=${START} LIMIT=${LIMIT} python3 tools/data_preprocessor.py $(DATASETS)
 
-
 # convert to tf records
 .PHONY: convert
 convert: ${DATA_DIR}
-	DATA_DIR=${DATA_DIR} python3 tools/data_tf_converter.py ${DATASETS} --del_raw
+	DATA_DIR=${DATA_DIR} python3 tools/data_tf_converter.py $(DATASETS) --del_raw
 
 # Opens up tensorboard for inspection of graphs and summaries
 .PHONY: tb
