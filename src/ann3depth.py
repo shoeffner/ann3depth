@@ -41,11 +41,18 @@ def main():
             for i in range(len(cluster_spec['worker'])):
                 session.run(queue.dequeue())
     elif args.job_name in ['worker', 'local']:
-        logger.info(f'Starting {args.job_name} job.')
+        chief = args.task_index == 0
 
+        logger.info(f'Starting {args.job_name} job.')
+        logger.info(f'Task: {args.task_index} -- Chief? {chief}')
         logger.info(f'Continue? {args.cont}.')
-        ckptdir = determine_checkpoint_dir(args.ckptdir, args.model, args.cont)
-        logger.info(f'Checkpoint dir is {ckptdir}.')
+
+        ckptdir = None
+        if chief:
+            ckptdir = determine_checkpoint_dir(args.ckptdir,
+                                               args.model,
+                                               args.cont)
+            logger.info(f'Checkpoint dir is {ckptdir}.')
 
         logger.info(f'Setting up replica settings.')
         ps_strategy = None
@@ -74,7 +81,7 @@ def main():
         logger.info('Starting session.')
         with tf.train.MonitoredTrainingSession(
                 master=server.target,
-                is_chief=args.task_index==0,
+                is_chief=chief,
                 checkpoint_dir=ckptdir,
                 scaffold=None,
                 hooks=hooks,
