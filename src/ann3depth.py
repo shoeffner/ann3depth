@@ -101,8 +101,8 @@ def main():
                 hooks=hooks,
                 chief_only_hooks=None,
                 save_checkpoint_secs=args.ckptfreq,
-                save_summaries_steps=100,
-                save_summaries_secs=None,
+                save_summaries_steps=None,
+                save_summaries_secs=args.sumfreq,
                 config=None,
                 stop_grace_period_secs=120,
                 log_step_count_steps=100) as session:
@@ -243,8 +243,10 @@ def parse_args():
                         help='Batchsize')
     parser.add_argument('--ckptdir', '-p', default='checkpoints',
                         help='Checkpoint directory')
-    parser.add_argument('--ckptfreq', '-f', default=600, type=int,
+    parser.add_argument('--ckptfreq', '-f', default=900, type=int,
                         help='Create a checkpoint every N seconds.')
+    parser.add_argument('--sumfreq', '-r', default=300, type=int,
+                        help='Create a summary every N seconds.')
     parser.add_argument('--datadir', '-d', default='data', type=str,
                         help='The data directory containing the datasets.')
     parser.add_argument('--cont', '-c', action='store_true',

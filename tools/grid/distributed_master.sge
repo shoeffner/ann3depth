@@ -61,7 +61,7 @@ for node in "${nodes[@]}"; do
 
     # Submit job
     echo Using $node as $job with parameters $param .
-    REPORT_FILE=$REPORT_FILE CLUSTER_SPEC=$cluster_spec_path JOB_TYPE=$job TASK_INDEX=$task_index PS_NODES=$PS_NODES WORKERS=$WORKERS CONDAENV=$CONDAENV MODEL=$MODEL EPOCHS=$EPOCHS BATCHSIZE=$BATCHSIZE DATASETS=$DATASETS CKPT_FREQ=$CKPT_FREQ TIMEOUT=$TIMEOUT CONT=$CONT qsub -w w -l h=$node $param -N a3d_${job:0:4}_${task_index} tools/grid/distributed_client.sge
+    REPORT_FILE=$REPORT_FILE CLUSTER_SPEC=$cluster_spec_path JOB_TYPE=$job TASK_INDEX=$task_index PS_NODES=$PS_NODES WORKERS=$WORKERS CONDAENV=$CONDAENV MODEL=$MODEL EPOCHS=$EPOCHS BATCHSIZE=$BATCHSIZE DATASETS=$DATASETS CKPT_DIR=$CKPT_DIR CKPT_FREQ=$CKPT_FREQ SUM_FREQ=$SUM_FREQ TIMEOUT=$TIMEOUT CONT=$CONT qsub -w w -l h=$node $param -N a3d_${job:0:4}_${task_index} tools/grid/distributed_client.sge
 
     (( count++ ))
 done
@@ -84,5 +84,5 @@ if [ -f "$REPORT_FILE" ]; then
     rm $REPORT_FILE
 else
     echo "Resubmitting job."
-    PS_NODES=${PS_NODES} WORKERS=${WORKERS} CONDAENV=${CONDAENV} MODEL=${MODEL} EPOCHS=${EPOCHS} BATCHSIZE=${BATCHSIZE} DATASETS=${DATASETS} CKPT_FREQ=${CKPT_FREQ} TIMEOUT=${TIMEOUT} CONT=--cont make distributed
+    PS_NODES=$PS_NODES WORKERS=$WORKERS CONDAENV=$CONDAENV MODEL=$MODEL EPOCHS=$EPOCHS BATCHSIZE=$BATCHSIZE DATASETS=$DATASETS CKPT_DIR=$CKPT_DIR CKPT_FREQ=$CKPT_FREQ SUM_FREQ=$SUM_FREQ TIMEOUT=$TIMEOUT CONT=--cont make distributed
 fi
