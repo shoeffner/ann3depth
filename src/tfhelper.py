@@ -57,6 +57,10 @@ def make_template(scope=None, create_scope_now_=False, unique_name_=None,
             return template(*caller_args, **caller_kwargs)
         return wrapper
 
+    if callable(scope):
+        return make_tf_template(scope)
+    return make_tf_template
+
 
 def with_scope(scope):
     """A decorator to wrap a function into a tf.name_scope.
