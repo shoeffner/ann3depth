@@ -22,7 +22,10 @@ source activate $CONDAENV
 CLUSTER_SPEC="$CLUSTER_SPEC.json" JOB_TYPE=$JOB_TYPE TASK_INDEX=$TASK_INDEX CONDAENV=$CONDAENV MODEL=$MODEL EPOCHS=$EPOCHS BATCHSIZE=$BATCHSIZE DATASETS=$DATASETS CKPT_FREQ=$CKPT_FREQ TIMEOUT=$TIMEOUT CONT=$CONT make train
 success=$?
 
-# Stop keep-alive process on success
-if [ $success -eq 0 ]; then
+echo Terminated with code $success.
+
+# Stop keep-alive process on success of worker
+if [ "$JOB_TYPE" == "worker" ] && [ $success -eq 0 ]; then
+    echo Notifying keepalive to not continue rescheduling.
     touch $REPORT_FILE
 fi

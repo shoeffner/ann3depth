@@ -82,8 +82,6 @@ if [ -f "$REPORT_FILE" ]; then
     echo Job done!
     echo Removing report file...
     rm $REPORT_FILE
-    echo Removing multiplexer files...
-    rm ~/.ssh/ann3d*
 else
     echo "Resubmitting job."
     PS_NODES=${PS_NODES} WORKERS=${WORKERS} CONDAENV=${CONDAENV} MODEL=${MODEL} EPOCHS=${EPOCHS} BATCHSIZE=${BATCHSIZE} DATASETS=${DATASETS} CKPT_FREQ=${CKPT_FREQ} TIMEOUT=${TIMEOUT} CONT=--cont make distributed
