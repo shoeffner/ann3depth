@@ -10,8 +10,21 @@ import tensorflow as tf
 import data
 import models
 
-
 def main():
+    """Initializes training.
+
+    Reads the program arguments and depending on the tasks starts the different
+    processes.
+
+    The local training is handled as a chief worker (worker with task 0) without
+    sharded variable placement.
+
+    The parameter servers don't use server.join() but a custom solution to
+    determine when to die (this works better with the Sun Grid Engine).
+
+    The workers start training with sharded variable placement if parameter
+    server tasks are available.
+    """
     logging.config.fileConfig('logging.ini')
     logger = logging.getLogger('ann3depth')
 
@@ -106,7 +119,21 @@ def main():
     else:
         logger.warning(f'No suitable job description found! {args.job_name}')
 
+
 def handle_stop(session, logger):
+    """Registers signal handlers and returns a function to check for stop
+    requests.
+
+    Handles these signals:
+        SIGUSR1, SIGUSR2, SIGALRM, SIGINT, SIGTERM
+
+    Args:
+        session: The MonitoredTrainingSession.
+        logger: The logger (to notify about received signals).
+
+    Returns:
+        A function to check whether the training session should stop or not.
+    """
     stop_request = []
     def signal_handler(signum, frame):
         logger.warning(f'Received signal {signal.Signals(signum).name}.')
@@ -168,6 +195,21 @@ def create_ps_notifier(cluster_spec):
 
 
 def determine_checkpoint_dir(ckptdir, model, cont=False):
+    """Determines which checkpoint directory to use.
+
+    If training continues, this selects a directory
+        ckptdir/model/x
+    where x is the last available number.
+    If not, it creates a directory x+1, or 0 if none
+    exists yet.
+
+    Args:
+        ckptdir: The base directory for checkpoints.
+        model: The model name.
+        cont: If True, uses an existing directory.
+
+    Return a checkpoint directory.
+    """
     ckptdir = os.path.join(ckptdir, model)
     try:
         runs = os.listdir(ckptdir)
@@ -177,6 +219,11 @@ def determine_checkpoint_dir(ckptdir, model, cont=False):
     return os.path.join(ckptdir, str(num))
 
 def parse_args():
+    """Parses arguments.
+
+    Returns:
+        The parsed argument namespace.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument('datasets', nargs='*',
                         default=['nyu'],
