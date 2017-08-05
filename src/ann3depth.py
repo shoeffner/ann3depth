@@ -36,7 +36,10 @@ def main():
 
     if args.job_name == 'ps':
         logger.info('Starting ps job.')
-        server.join()
+        queue = create_done_queue(args.task_index, len(cluster_spec['worker']))
+        with tf.Session(server.target) as session:
+            for i in range(len(cluster_spec['worker'])):
+                session.run(queue.dequeue())
     elif args.job_name in ['worker', 'local']:
         logger.info(f'Starting {args.job_name} job.')
 
@@ -64,7 +67,8 @@ def main():
 
         logger.info(f'Setting up hooks.')
         hooks = [
-            tf.train.StopAtStepHook(last_step=args.steps)
+            tf.train.StopAtStepHook(last_step=args.steps),
+            tf.train.FinalOpsHook(create_ps_notifier(cluster_spec))
         ]
 
         logger.info('Starting session.')
@@ -82,14 +86,11 @@ def main():
                 stop_grace_period_secs=120,
                 log_step_count_steps=100) as session:
 
-            if args.task_index == 0:
-                logger.info('Setting up signal handlers.')
-                should_stop = handle_stop(session, logger)
-                if args.job_name != 'local':
-                    logger.info(f'Starting alarm: {args.timeout} s timeout.')
-                    signal.alarm(args.timeout)
-            else:
-                should_stop = session.should_stop
+            logger.info('Setting up signal handlers.')
+            should_stop = handle_stop(session, logger)
+            if args.job_name != 'local':
+                logger.info(f'Starting alarm: {args.timeout} s timeout.')
+                signal.alarm(args.timeout)
 
             while not should_stop():
                 session.run(model_train_op)
@@ -108,6 +109,56 @@ def handle_stop(session, logger):
               signal.SIGTERM]:
         signal.signal(s, signal_handler)
     return lambda: stop_request or not session or session.should_stop()
+
+def create_done_queue(ps_task, num_workers):
+    """Creates a queue on and for the ps task with the capacity of the number
+    of workers.
+    At the end (using a FinalOpsHook) each worker will write a 1 into all
+    ps queues.
+    The ps tasks stay alive until they read worker many times from their own
+    queue.
+
+    See
+    https://github.com/tensorflow/tensorflow/issues/4713#issuecomment-269499287
+    for more info.
+
+    Args:
+        ps_task: The ps task for this queue.
+        num_workers: The total number of workers (to determine the queue
+                     capacity)
+
+    Returns:
+        A FIFOQueue.
+    """
+    with tf.device(f'/job:ps/task:{ps_task}'):
+        return tf.FIFOQueue(num_workers, tf.int32,
+                            shared_name=f'shutdown_ps_{ps_task}')
+
+def create_ps_notifier(cluster_spec):
+    """Creates ops to stop all ps_tasks eventually, see create_done_queue.
+
+    For each ps task a queue is created on those shards using create_done_queue.
+    This method returns either tf.no_op() (in case this is only a local job) or
+    a list of enqueue ops to enqueue a 1 to each ps task's queue.
+
+    The ops should be used with a FinalOpsHook.
+
+    See
+    https://github.com/tensorflow/tensorflow/issues/4713#issuecomment-269499287
+    for more info.
+
+    Args:
+        cluster_spec: The cluster spec dictionary.
+
+    Returns:
+        A list of enqueue(1)_ops, or a no_op for local workers.
+    """
+    num_ps = len(cluster_spec.get('ps', []))
+    num_workers = len(cluster_spec.get('worker', []))
+    if 'local' in cluster_spec or num_ps == 0:
+        return tf.no_op()
+    return [create_done_queue(i, num_workers).enqueue(1) for i in range(num_ps)]
+
 
 def determine_checkpoint_dir(ckptdir, model, cont=False):
     ckptdir = os.path.join(ckptdir, model)
