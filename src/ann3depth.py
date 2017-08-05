@@ -145,7 +145,7 @@ def handle_stop(session, stop_request_list, logger):
     def signal_handler(signum, frame):
         logger.warning(f'Received signal {signal.Signals(signum).name}.')
         logger.info(f'Requesting session to stop.')
-        stop_request_list.append(signal)
+        stop_request_list.append(signum)
     for s in [signal.SIGUSR1, signal.SIGUSR2, signal.SIGALRM, signal.SIGINT,
               signal.SIGTERM]:
         signal.signal(s, signal_handler)
