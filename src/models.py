@@ -11,8 +11,8 @@ class _DistributedConvolutionalNeuralFields:
     """
 
     def __init__(self):
-        self.patch_size = (224, 224)
-        self.sp_size = (10, 10)
+        self.patch_size = (224, 224)  # Liu et al.: 224x224
+        self.sp_size = (10, 10)  # Liu et al.: super pixels, not patches
         self.gamma = 1
 
     def pair_indices(self, images):
