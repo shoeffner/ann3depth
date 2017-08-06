@@ -57,7 +57,6 @@ def main():
     elif args.job_name in ['worker', 'local']:
         chief = args.task_index == 0
 
-        logger.info(f'Starting {args.job_name} job.')
         logger.info(f'Task: {args.task_index} -- Chief? {chief}')
         logger.info(f'Continue? {args.cont}.')
 
