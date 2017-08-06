@@ -19,6 +19,7 @@ source activate $CONDAENV
 # Determine available hosts.
 hosts=($(qstat -f -F h -U $(whoami) | python tools/grid/extract_hosts.py))
 
+echo ${#hosts[@]} hosts available: ${hosts[@]}
 
 # We got enough hosts (or so we hope) so let's determine who will become a worker und who a ps node and store
 # a proper cluster spec.
@@ -65,7 +66,17 @@ for node in "${nodes[@]}"; do
 
     (( count++ ))
 done
-echo All jobs submitted, idling now.
+
+echo All jobs submitted, checking back in 1 minute to query their status.
+
+sleep 60
+if [ $(qstat | grep "a3d_[^k]" | wc -l) -ne $(($WORKERS + $PS_NODES)) ]; then
+    echo Not all jobs worked properly. Cleaning up queue.
+    qdel -u $(whoami)
+fi
+
+echo All jobs seem to be fine, idling now.
+
 
 
 dead=0
