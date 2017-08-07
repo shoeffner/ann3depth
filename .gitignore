@@ -3,6 +3,7 @@
 /data/*
 /tb_logs/*
 /grid_logs/*
+/tools/grid/startup.sh
 
 __pycache__
 *.pdf

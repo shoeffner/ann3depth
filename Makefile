@@ -82,16 +82,10 @@ train: ${DATA_DIR}
 continue: data
 	${SCRIPT} --cont ${COMMON_PARAMETERS} ${TRAIN_PARAMETERS} ${DATASETS}
 
-
-# Create conda environment used by grid computation servers
-.PHONY: conda
-conda:
-	CONDAENV=${CONDAENV} /bin/bash ./tools/grid/setup-conda-env.sh
-
 # Submit a grid training job
 .DEFAULT: distributed
 .PHONY: distributed
-distributed: ${LOG_DIR}
+distributed: ${LOG_DIR} ./tools/grid/startup.sh
 	PS_NODES=${PS_NODES} WORKERS=${WORKERS} CONDAENV=${CONDAENV} MODEL=${MODEL} STEPS=${STEPS} BATCHSIZE=${BATCHSIZE} DATASETS=${DATASETS} CKPT_DIR=${CKPT_DIR} CKPT_FREQ=${CKPT_FREQ} SUM_FREQ=${SUM_FREQ} DATA_DIR=${DATA_DIR} TIMEOUT=${TIMEOUT} CONT=${CONT} qsub ./tools/grid/distributed_master.sge
 
 
@@ -104,7 +98,7 @@ help:
 
 # Installs the requirements from the requirements file
 .PHONY: install
-install: requirements.txt
+install: ./tools/grid/startup.sh requirements.txt
 	pip3 install -r requirements.txt -U
 
 # list datasets to be used with download target
@@ -132,6 +126,14 @@ convert: ${DATA_DIR}
 tb: ${CKPT_DIR}
 	tensorboard --logdir=${CKPT_DIR} --host=0.0.0.0 --port=${TB_PORT}
 
+# Create conda environment used by grid computation servers
+.PHONY: conda
+conda: ./tools/grid/startup.sh
+	CONDAENV=${CONDAENV} /bin/bash ./tools/grid/setup-conda-env.sh
+
+# Create the startup.sh which will be sourced by the grid master
+./tools/grid/startup.sh: ./tools/configure.py
+	python3 ./tools/configure.py
 
 
 ####### DOCUMENTATION ##########

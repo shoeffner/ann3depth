@@ -5,7 +5,6 @@
 #$ -V
 #$ -o grid_logs/$JOB_ID.$HOSTNAME.out
 
-
 REPORT_FILE=${REPORT_FILE:-grid_logs/done}
 
 nodes=($(cut -f1 -d',' $CLUSTER_SPEC.csv))
@@ -19,7 +18,7 @@ echo =============
 source activate $CONDAENV
 
 # Train
-CLUSTER_SPEC="$CLUSTER_SPEC.json" JOB_TYPE=$JOB_TYPE TASK_INDEX=$TASK_INDEX CONDAENV=$CONDAENV MODEL=$MODEL EPOCHS=$EPOCHS BATCHSIZE=$BATCHSIZE DATASETS=$DATASETS CKPT_DIR=$CKPT_DIR CKPT_FREQ=$CKPT_FREQ SUM_FREQ=$SUM_FREQ TIMEOUT=$TIMEOUT CONT=$CONT make train
+CLUSTER_SPEC="$CLUSTER_SPEC.json" make train
 success=$?
 
 echo Terminated with code $success.
