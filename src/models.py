@@ -206,3 +206,25 @@ class _DistributedConvolutionalNeuralFields:
                                   tf.train.get_or_create_global_step())
 
 dcnf = _DistributedConvolutionalNeuralFields()
+
+
+class _MNISTTest:
+    def __call__(self, inputs, targets):
+        temp = tf.reshape(inputs, [-1, 784])
+        temp = tf.layers.dense(temp, 8, activation=tf.nn.relu)
+        temp = tf.layers.dense(temp, 4, activation=tf.nn.relu)
+        temp = tf.layers.dense(temp, 2, activation=tf.nn.relu)
+        temp = tf.layers.dense(temp, 1, activation=tf.nn.sigmoid)
+
+        with tf.name_scope('summaries'):
+            output = tf.cast(temp, tf.uint8)
+            tf.summary.scalar('Output', output)
+            tf.summary.image('Input', inputs, max_outputs=1)
+            tf.summary.scalar('Target', targets)
+
+        optimizer = tf.train.AdamOptimizer()
+        loss = tf.losses.mean_squared_error(tf.cast(targets, tf.float32), temp)
+        return optimizer.minimize(loss,
+                                  tf.train.get_or_create_global_step())
+
+mnist = _MNISTTest()
