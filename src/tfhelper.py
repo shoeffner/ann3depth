@@ -102,11 +102,22 @@ def with_device(device):
 
 
 def estimate_size_of(graphkey):
+    """Estimates the size of all tensors in a collection.
+
+    Args:
+        graphkey: The GraphKey key.
+
+    Returns:
+        The estimated size in MB.
+    """
     return sum([functools.reduce(operator.mul, [int(s) for s in v.shape])
                 for v in tf.get_collection(graphkey)]) * 4 / 1024 / 1024
 
 
 class RoundRobinWorker:
+    """If used as a tf.device device function, places each op on the next
+    worker."""
+
     def __init__(self, num_workers=1):
         self.iter = itertools.cycle(range(num_workers))
 
