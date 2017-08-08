@@ -63,6 +63,7 @@ for node in "${nodes[@]}"; do
 
     # Submit job
     echo Using $node as $job with parameters $param .
+    # export CUDA_VISIBLE_DEVICES=-1
     REPORT_FILE=$REPORT_FILE CLUSTER_SPEC=$cluster_spec_path JOB_TYPE=$job TASK_INDEX=$task_index qsub -w w -l h=$node $param -N a3d_${job:0:4}_${task_index} tools/grid/distributed_client.sge
 
     (( count++ ))

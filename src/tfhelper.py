@@ -1,4 +1,7 @@
 import functools
+import itertools
+import operator
+
 import tensorflow as tf
 
 
@@ -78,3 +81,26 @@ def with_scope(scope):
                 return function(*args, **kwargs)
         return wrapper
     return add_scope
+
+
+def with_device(device):
+    """A decorator to specify a device for a function.
+
+    Args:
+        device: The device name.
+
+    Returns:
+        The wrapped function.
+    """
+    def set_device(function):
+        @functools.wraps(function)
+        def wrapper(*args, **kwargs):
+            with tf.device(device):
+                return function(*args, **kwargs)
+        return wrapper
+    return set_device
+
+
+def estimate_size_of(graphkey):
+    return sum([functools.reduce(operator.mul, [int(s) for s in v.shape])
+                for v in tf.get_collection(graphkey)]) * 4 / 1024 / 1024

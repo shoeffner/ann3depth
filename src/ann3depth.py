@@ -10,6 +10,8 @@ import tensorflow as tf
 
 import data
 import models
+import tfhelper
+
 
 def main():
     """Initializes training.
@@ -67,7 +69,7 @@ def main():
                                                args.cont)
             logger.info(f'Checkpoint dir is {ckptdir}.')
 
-        logger.info(f'Setting up replica settings.')
+        logger.info('Setting up replica settings.')
         ps_strategy = None
         if cluster_spec.get('ps'):
             ps_strategy = tf.contrib.training.GreedyLoadBalancingStrategy(
@@ -85,7 +87,17 @@ def main():
             inputs, targets = data.inputs(args.datadir, args.dataset, args.batchsize)
             model_train_op = getattr(models, args.model)(inputs, targets)
 
-        logger.info(f'Setting up hooks.')
+            size_train = tfhelper.estimate_size_of(tf.GraphKeys.TRAINABLE_VARIABLES)
+            logger.debug(f'Trainable variables have {size_train:.1f} MB')
+
+        logger.info('Setting up config.')
+        config = tf.ConfigProto(
+            # device_count={'CPU': 1, 'GPU': 0},
+            # allow_soft_placement=True,
+            # log_device_placement=True,
+        )
+
+        logger.info('Setting up hooks.')
         hooks = [
             tf.train.StopAtStepHook(last_step=args.steps),
             tf.train.FinalOpsHook(create_ps_notifier(cluster_spec))
@@ -102,7 +114,7 @@ def main():
                 save_checkpoint_secs=args.ckptfreq,
                 save_summaries_steps=None,
                 save_summaries_secs=args.sumfreq,
-                config=None,
+                config=config,
                 stop_grace_period_secs=120,
                 log_step_count_steps=100) as session:
 
