@@ -90,6 +90,9 @@ def _convert_img_depth(key, record, *args):
     image = tf.reshape(image, [480, 640, 3])
     depth = tf.reshape(depth, [480, 640, 1])
 
+    # Make static size
+    image = tf.image.resize_images(image, [240, 320])
+    depth = tf.image.resize_images(depth, [240, 320])
     return image, depth
 
 

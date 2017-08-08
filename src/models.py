@@ -11,8 +11,8 @@ class _DistributedConvolutionalNeuralFields:
     """
 
     def __init__(self):
-        self.patch_size = (224, 224)  # Liu et al.: 224x224
-        self.sp_size = (10, 10)  # Liu et al.: super pixels, not patches
+        self.patch_size = (100, 100)  # Liu et al.: 224x224
+        self.sp_size = (40, 40)  # Liu et al.: super pixels, not patches
         self.gamma = 1
 
     def pair_indices(self, images):
@@ -58,28 +58,35 @@ class _DistributedConvolutionalNeuralFields:
 
     @tfhelper.make_template('unary/patch')
     def unary_part_patch(self, image_patch):
-        temp = tf.layers.conv2d(image_patch, 64, 11, activation=tf.nn.relu)
-        temp = tf.layers.max_pooling2d(temp, 2, 2)
-        temp = tf.layers.conv2d(temp, 256, 5, activation=tf.nn.relu)
-        temp = tf.layers.max_pooling2d(temp, 2, 2)
-        temp = tf.layers.conv2d(temp, 256, 3, activation=tf.nn.relu)
-        temp = tf.layers.conv2d(temp, 256, 3, activation=tf.nn.relu)
-        temp = tf.layers.conv2d(temp, 256, 3, activation=tf.nn.relu)
-        temp = tf.layers.max_pooling2d(temp, 2, 2)
+        with tf.device('/job:worker/task:1'):
+            temp = tf.layers.conv2d(image_patch, 64, 11, activation=tf.nn.relu)
+            temp = tf.layers.max_pooling2d(temp, 2, 2)
+        with tf.device('/job:worker/task:2'):
+            temp = tf.layers.conv2d(temp, 256, 5, activation=tf.nn.relu)
+            temp = tf.layers.max_pooling2d(temp, 2, 2)
+            temp = tf.layers.conv2d(temp, 256, 3, activation=tf.nn.relu)
+        with tf.device('/job:worker/task:3'):
+            temp = tf.layers.conv2d(temp, 256, 3, activation=tf.nn.relu)
+            temp = tf.layers.conv2d(temp, 256, 3, activation=tf.nn.relu)
+            temp = tf.layers.max_pooling2d(temp, 2, 2)
 
         # Fit result into dense layer's 1D
         temp = tf.reshape(temp, [int(image_patch.shape[0]), -1])
 
-        temp = tf.layers.dense(temp, 4096, activation=tf.nn.relu)
-        temp = tf.layers.dense(temp, 128, activation=tf.nn.relu)
-        temp = tf.layers.dense(temp, 16, activation=tf.nn.sigmoid)
-        temp = tf.layers.dense(temp, 1, activation=None)
+        # temp = tf.layers.dense(temp, 4096, activation=tf.nn.relu)
+        with tf.device('/job:worker/task:2'):
+            temp = tf.layers.dense(temp, 128, activation=tf.nn.relu)
+            temp = tf.layers.dense(temp, 16, activation=tf.nn.sigmoid)
+            temp = tf.layers.dense(temp, 1, activation=None)
         return temp
 
     @tfhelper.with_scope('unary')
     def unary_part(self, images):
-        patches = self.patches(images)
-        return tf.map_fn(self.unary_part_patch, patches)
+        with tf.variable_scope('unary/partition',
+                               partitioner=tf.variable_axis_size_partitioner((64 << 20) -1)):
+
+            patches = self.patches(images)
+            return tf.map_fn(self.unary_part_patch, patches)
 
     @tfhelper.make_template('pairwise/dense')
     def pairwise_dense(self, similarities):
@@ -100,23 +107,25 @@ class _DistributedConvolutionalNeuralFields:
 
     @tfhelper.with_scope('pairwise')
     def pairwise_part(self, images):
-        superpixels = self.superpixels(images)
-        pairs = self.pair_indices(images)
+        with tf.variable_scope('pairwise/partition',
+                               partitioner=tf.variable_axis_size_partitioner((64 << 20) -1)):
+            superpixels = self.superpixels(images)
+            pairs = self.pair_indices(images)
 
-        histograms = tf.map_fn(lambda batch: tf.map_fn(self.color_histogram,
-                                                       batch), superpixels)
+            histograms = tf.map_fn(lambda batch: tf.map_fn(self.color_histogram,
+                                                        batch), superpixels)
 
-        # color difference similarity
-        cdiff_sim = self.similarity(tf.reduce_mean(superpixels, axis=-1),
-                                    pairs)
-        # color histogram similarity
-        histdiff_sim = self.similarity(histograms, pairs)
-        # TODO: texture disparity
+            # color difference similarity
+            cdiff_sim = self.similarity(tf.reduce_mean(superpixels, axis=-1),
+                                        pairs)
+            # color histogram similarity
+            histdiff_sim = self.similarity(histograms, pairs)
+            # TODO: texture disparity
 
-        # gather similarities
-        similarities = tf.stack([cdiff_sim, histdiff_sim], axis=-1)
+            # gather similarities
+            similarities = tf.stack([cdiff_sim, histdiff_sim], axis=-1)
 
-        return tf.map_fn(self.pairwise_dense, similarities)
+            return tf.map_fn(self.pairwise_dense, similarities)
 
     @tfhelper.with_scope('loss')
     def loss_part(self, target, z, r):
