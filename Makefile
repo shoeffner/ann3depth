@@ -30,7 +30,7 @@ CLUSTER_PARAMS ?= ${CLUSTER_PARAM1} ${CLUSTER_PARAM2} ${CLUSTER_PARAM3}
 MODEL ?= dcnf
 STEPS ?= 10000000
 BATCHSIZE ?= 32
-DATASETS ?= nyu
+DATASET ?= nyu
 SUM_FREQ ?= 300
 CKPT_FREQ ?= 900
 CKPT_DIR := checkpoints
@@ -53,20 +53,20 @@ TRAIN_PARAMETERS := --steps=${STEPS} --batchsize=${BATCHSIZE} --ckptfreq=${CKPT_
 # Check if download is wanted, and if so, set dataset names
 # see http://stackoverflow.com/a/14061796/3004221
 ifeq (download,$(firstword $(MAKECMDGOALS)))
-    DATASETS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
-    $(eval $(DATASETS):;@:)
+    DATASET := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+    $(eval $(DATASET):;@:)
 endif
 
 # Check if preprocessing is wanted, and if so, set dataset names
 ifeq (preprocess,$(firstword $(MAKECMDGOALS)))
-    DATASETS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
-    $(eval $(DATASETS):;@:)
+    DATASET := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+    $(eval $(DATASET):;@:)
 endif
 
 # Check if convert is wanted, and if so, set dataset names
 ifeq (convert,$(firstword $(MAKECMDGOALS)))
-    DATASETS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
-    $(eval $(DATASETS):;@:)
+    DATASET := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+    $(eval $(DATASET):;@:)
 endif
 
 
@@ -75,18 +75,18 @@ endif
 # Trains the network
 .PHONY: train
 train: ${DATA_DIR}
-	${SCRIPT} ${COMMON_PARAMETERS} ${TRAIN_PARAMETERS} ${DATASETS}
+	${SCRIPT} ${COMMON_PARAMETERS} ${TRAIN_PARAMETERS} ${DATASET}
 
 # Reloads a checkpoint and continues training
 .PHONY: continue
 continue: data
-	${SCRIPT} --cont ${COMMON_PARAMETERS} ${TRAIN_PARAMETERS} ${DATASETS}
+	${SCRIPT} --cont ${COMMON_PARAMETERS} ${TRAIN_PARAMETERS} ${DATASET}
 
 # Submit a grid training job
 .DEFAULT: distributed
 .PHONY: distributed
 distributed: ${LOG_DIR} ./tools/grid/startup.sh
-	PS_NODES=${PS_NODES} WORKERS=${WORKERS} CONDAENV=${CONDAENV} MODEL=${MODEL} STEPS=${STEPS} BATCHSIZE=${BATCHSIZE} DATASETS=${DATASETS} CKPT_DIR=${CKPT_DIR} CKPT_FREQ=${CKPT_FREQ} SUM_FREQ=${SUM_FREQ} DATA_DIR=${DATA_DIR} TIMEOUT=${TIMEOUT} CONT=${CONT} qsub ./tools/grid/distributed_master.sge
+	PS_NODES=${PS_NODES} WORKERS=${WORKERS} CONDAENV=${CONDAENV} MODEL=${MODEL} STEPS=${STEPS} BATCHSIZE=${BATCHSIZE} DATASET=${DATASET} CKPT_DIR=${CKPT_DIR} CKPT_FREQ=${CKPT_FREQ} SUM_FREQ=${SUM_FREQ} DATA_DIR=${DATA_DIR} TIMEOUT=${TIMEOUT} CONT=${CONT} qsub ./tools/grid/distributed_master.sge
 
 
 
@@ -109,17 +109,17 @@ datasets:
 # download data sets and extract them
 .PHONY: download
 download: ${DATA_DIR}
-	DATA_DIR=${DATA_DIR} python3 tools/data_downloader.py $(DATASETS)
+	DATA_DIR=${DATA_DIR} python3 tools/data_downloader.py $(DATASET)
 
 # preprocess data sets and extract them
 .PHONY: preprocess
 preprocess: ${DATA_DIR}
-	DATA_DIR=${DATA_DIR} WIDTH=${WIDTH} HEIGHT=${HEIGHT} DHEIGHT=${DHEIGHT} DWIDTH=${DWIDTH} FORCE=${FORCE} START=${START} LIMIT=${LIMIT} python3 tools/data_preprocessor.py $(DATASETS)
+	DATA_DIR=${DATA_DIR} WIDTH=${WIDTH} HEIGHT=${HEIGHT} DHEIGHT=${DHEIGHT} DWIDTH=${DWIDTH} FORCE=${FORCE} START=${START} LIMIT=${LIMIT} python3 tools/data_preprocessor.py $(DATASET)
 
 # convert to tf records
 .PHONY: convert
 convert: ${DATA_DIR}
-	DATA_DIR=${DATA_DIR} python3 tools/data_tf_converter.py $(DATASETS) --del_raw
+	DATA_DIR=${DATA_DIR} python3 tools/data_tf_converter.py $(DATASET) --del_raw
 
 # Opens up tensorboard for inspection of graphs and summaries
 .PHONY: tb

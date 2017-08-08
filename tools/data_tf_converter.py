@@ -29,7 +29,7 @@ def main():
                                      dataset,
                                      dir + '.tfrecords')
                     ) as writer:
-                directory = os.path.join(os.environ['DATA_DIR'], dir, dataset)
+                directory = os.path.join(os.environ['DATA_DIR'], dataset, dir)
                 depth_paths = glob.glob(os.path.join(directory, '*-depth.png'))
                 for depth_path in depth_paths:
                     image_path = depth_path[:-9] + 'image.png'

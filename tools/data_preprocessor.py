@@ -12,6 +12,7 @@ images, but make the assumption that they always follow the same name scheme and
 are thus ordered!
 """
 import os
+import shutil
 import sys
 
 import h5py
@@ -63,6 +64,8 @@ def __empty_dirs_or_fail(directories):
 
 def __process_make3d1(path_train, path_test):
     """Converts data of make3d1."""
+    print(f'Images: {WIDTH}x{HEIGHT} Depths: {D_WIDTH}x{D_HEIGHT}')
+
     path = os.path.join(os.environ['DATA_DIR'], 'make3d1', 'unpacked')
     depth_path = [os.path.join(path, d) for d in ['Train400Depth',
                                                   'Test134Depth']]
@@ -102,6 +105,8 @@ def __process_make3d1(path_train, path_test):
 
 def __process_make3d2(path_train, path_test):
     """Converts data of make3d2. Needs to perform a rotation."""
+    print(f'Images: {WIDTH}x{HEIGHT} Depths: {D_WIDTH}x{D_HEIGHT}')
+
     path = os.path.join(os.environ['DATA_DIR'], 'make3d2', 'unpacked')
 
     depth_path = [os.path.join(path, d) for d in ['Dataset3_Depths',
@@ -141,6 +146,8 @@ def __process_make3d2(path_train, path_test):
 def __process_nyu(path_train, path_test):
     """Converts data of nyu. Extracts data from single mat file.
     Rotates images by 90 degrees clock-wise."""
+    print(f'Images: {WIDTH}x{HEIGHT} Depths: {D_WIDTH}x{D_HEIGHT}')
+
     target_path = [path_train, path_test]
 
     train_images = 5
@@ -193,32 +200,19 @@ def main():
         'nyu': __process_nyu,
     }
 
-    path_train = os.path.join(os.environ['DATA_DIR'], 'train')
-    path_test = os.path.join(os.environ['DATA_DIR'], 'test')
-    for k in processors:
-        try:
-            os.makedirs(os.path.join(path_train, k), 0o755)
-        except OSError:
-            pass
-        try:
-            os.makedirs(os.path.join(path_test, k), 0o755)
-        except OSError:
-            pass
-
     print('\nPreprocessing data...')
-    print(f'Images: {WIDTH}x{HEIGHT} Depths: {D_WIDTH}x{D_HEIGHT}')
-
     for key, processor in processors.items():
+        train = os.path.join(os.environ['DATA_DIR'], key, 'train')
+        test = os.path.join(os.environ['DATA_DIR'], key, 'test')
         try:
-            if len(sys.argv) > 1:
-                if key in sys.argv:
-                    print(f'Preprocessing {key}')
-                    processor(os.path.join(path_train, key),
-                              os.path.join(path_test, key))
-            else:  # try to preprocess everything
+            if key in sys.argv or len(sys.argv) == 1:
+                try:
+                    os.makedirs(train, 0o755)
+                    os.makedirs(test, 0o755)
+                except OSError:
+                    pass
                 print(f'Preprocessing {key}')
-                processor(os.path.join(path_train, key),
-                          os.path.join(path_test, key))
+                processor(train, test)
         except FileExistsError as fe:
             print(fe)
     print('Preprocessing done.')

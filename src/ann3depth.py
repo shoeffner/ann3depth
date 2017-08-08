@@ -82,8 +82,8 @@ def main():
 
         logger.info(f'Loading model {args.model}.')
         with tf.device(device_setter):
-            images, depths = data.inputs(args.datasets, args.batchsize)
-            model_train_op = getattr(models, args.model)(images, depths)
+            inputs, targets = data.inputs(args.datadir, args.dataset, args.batchsize)
+            model_train_op = getattr(models, args.model)(inputs, targets)
 
         logger.info(f'Setting up hooks.')
         hooks = [
@@ -231,9 +231,8 @@ def parse_args():
         The parsed argument namespace.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('datasets', nargs='*',
-                        default=['nyu'],
-                        help='The datasets to use.')
+    parser.add_argument('dataset', default='nyu', type=str,
+                        help='The dataset to use.')
     parser.add_argument('--model', '-m', default='', type=str,
                         help='Enter a model name.')
     parser.add_argument('--steps', '-s', default=1000000, type=int,

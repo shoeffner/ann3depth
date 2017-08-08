@@ -13,6 +13,7 @@ Usage:
          Existing files are skipped!
 """
 import argparse
+import gzip
 import os
 import re
 import sys
@@ -189,6 +190,11 @@ def unpack_dataset(path):
             print(f'Extracting {item}')
             with tarfile.open(os.path.join(path, item)) as tar:
                 tar.extractall(os.path.join(destfolder, item[:item.find('.')]))
+        elif item.endswith('gz'):
+            with gzip.open(os.path.join(path, item)) as gz:
+                with open(os.path.join(destfolder, item[:item.find('.')]),
+                          'wb') as out:
+                    shutil.copyfileobj(gz, out)
         else:
             if not os.path.isdir(destfolder):
                 os.makedirs(destfolder)
