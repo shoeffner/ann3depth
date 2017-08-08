@@ -144,10 +144,45 @@ class _DistributedConvolutionalNeuralFields:
         # E(y, x)
         energy = loss_unary + loss_pairwise
 
+        # Integral exp( -E(y, x) ) dy
+
+        def get_A(batch, R):
+            I = tf.eye(len(pairs[0]))
+            p = tf.gather(batch, pairs[0])
+            q = tf.gather(batch, pairs[1])
+            R = tf.scatter_nd_update(R, [*zip(*pairs)], tf.squeeze(p - q))
+            R = tf.scatter_nd_update(R, [*zip(*pairs[::-1])], tf.squeeze(q - p))
+            D = tf.diag(tf.reduce_sum(R, axis=1))
+            return I + D - R
+        # n.b.: define R outside of get_A to avoid UPDATE_OP being placed inside
+        # loop (see https://github.com/tensorflow/tensorflow/issues/6087)
+        R = tf.Variable(tf.zeros((len(pairs[0]), len(pairs[1]))),
+                                    trainable=False)
+        A = tf.map_fn(lambda y: get_A(y, R), y_sp)
+
+        # TODO: Match all z to superpixels without dropping some
+        def modified_z(z):
+            max_rows, max_cols = self.num_superpixels(target)
+            pixels = []
+            for row in range(1, max_rows - 1):
+                for col in range(2 - (row & 1), max_cols - 1, 2):
+                    for addend in [-max_cols, max_cols, -1, 1]:
+                        pixels.append(row * max_cols + col + addend)
+            return tf.gather(z, pixels)
+        z = tf.map_fn(modified_z, z)
+        zT = tf.transpose(z, [0, 2, 1])
+        fac = math.pi ** (len(pairs[0]) / 2) / tf.norm(A) ** .5
+        exp = tf.exp(zT @ A @ z - zT @ z)
+        Z = fac * exp
+        # Since all other values are reduced to their means, we do so for the
+        # integral as well
+        Z = tf.reduce_mean(Z)
+
         # Neg log-likelihood
         exp_energy = tf.exp(-energy)
-        loss = -tf.log(exp_energy / tf.cumsum(exp_energy))
+        loss = -tf.log(exp_energy / Z)
         tf.losses.add_loss(loss)
+
         return loss
 
     def __call__(self, images, depths):
