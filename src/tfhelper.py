@@ -104,3 +104,11 @@ def with_device(device):
 def estimate_size_of(graphkey):
     return sum([functools.reduce(operator.mul, [int(s) for s in v.shape])
                 for v in tf.get_collection(graphkey)]) * 4 / 1024 / 1024
+
+
+class RoundRobinWorker:
+    def __init__(self, num_workers=1):
+        self.iter = itertools.cycle(range(num_workers))
+
+    def __call__(self, n):
+        return f'/job:worker/task:{next(self.iter)}/cpu:0'
