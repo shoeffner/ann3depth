@@ -143,6 +143,27 @@ def __process_make3d2(path_train, path_test):
             smisc.imsave(os.path.join(tp, f'{name}-depth.png'), depth)
 
 
+def __process_mnist(path_train, path_test):
+    """Moves the mnist files to the proper directory."""
+    target_path = [path_train, path_test]
+
+    __empty_dirs_or_fail(target_path)
+
+    path = os.path.join(os.environ['DATA_DIR'], 'mnist', 'unpacked')
+    train_prefix = 'train-'
+    test_prefix = 't10k-'
+    for fn in os.listdir(path):
+        if fn.startswith(train_prefix):
+            goal = path_train
+        elif fn.startswith(test_prefix):
+            goal = path_test
+        else:
+            print(f'Skipping {fn}')
+            continue
+        print(f'Moving {fn}')
+        shutil.move(os.path.join(path, fn), goal)
+
+
 def __process_nyu(path_train, path_test):
     """Converts data of nyu. Extracts data from single mat file.
     Rotates images by 90 degrees clock-wise."""
@@ -198,6 +219,7 @@ def main():
         'make3d1': __process_make3d1,
         'make3d2': __process_make3d2,
         'nyu': __process_nyu,
+        'mnist': __process_mnist,
     }
 
     print('\nPreprocessing data...')

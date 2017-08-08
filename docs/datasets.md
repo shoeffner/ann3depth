@@ -87,20 +87,26 @@
 - http://cs.stanford.edu/people/asaxena/learningdepth/Data/Dataset3_Depths.tar.gz
 
 
-# Active Vision Dataset (AVD)
+# MNIST Database of handwritten digits (mnist)
 
-> Our dataset aims to allow simulation of robotic motion through an environment
-> for object detection. We collect data in many scenes, which may be one or more
-> rooms in a home or office.
+> The MNIST database was constructed from NIST's Special Database 3 and
+> Special Database 1 which contain binary images of handwritten digits.
 
-- Size: unknown
-- URL: http://cs.unc.edu/~ammirato/active_vision_dataset_website/index.html
+- Size: 11.06 MB
+- URL: http://yann.lecun.com/exdb/mnist/
 
 ```tex
-@inproceedings{ammirato2017,
-    author    = "Phil Ammirato and Patrick Poirson and Eunbyung Park and Jana Kosecka and Alexander C. Berg",
-    title     = {A Dataset for Developing and Benchmarking Active Vision},
-    booktitle = {IEEE International Conference on Robotics and Automation (ICRA)},
-    year      = {2017}
+@misc{lecun1998,
+    author    = "Yann LeCun and Corinna Cortes and Christopher J.C. Burges",
+    title     = {The MNIST Database of handritten digits},
+    year      = {1998}
+    note      = {\url{http://yann.lecun.com/exdb/mnist/}}
 }
 ```
+
+## Files
+
+- http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz
+- http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz
+- http://yann.lecun.com/exdb/mnist/t10k-images-idx3-ubyte.gz
+- http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz
