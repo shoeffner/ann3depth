@@ -3,7 +3,7 @@
 #$ -l mem=150M
 #$ -cwd
 #$ -j y
-#$ -v PS_NODES,WORKERS,CONDAENV,MODEL,STEPS,BATCHSIZE,DATASETS,CKPT_DIR,CKPT_FREQ,SUM_FREQ,TIMEOUT,CONT
+#$ -v PS_NODES,WORKERS,CONDAENV,MODEL,STEPS,BATCHSIZE,DATASETS,CKPT_DIR,CKPT_FREQ,SUM_FREQ,TIMEOUT
 #$ -notify
 #$ -o grid_logs/keepalive.$JOB_ID.$HOSTNAME.out
 
@@ -12,6 +12,11 @@ source ./tools/grid/startup.sh
 KEEP_ALIVE_INTERVAL=10
 MEMORY_RATIO=0.9
 REPORT_FILE=grid_logs/done
+
+
+function clean_up {
+    qdel $(qstat -u $(whoami) | grep 'a3d_[^k]' | cut -f2 -d' ')
+}
 
 
 source activate $CONDAENV
@@ -76,18 +81,26 @@ echo All jobs submitted, checking back in 1 minute to query their status.
 sleep 60
 if [ $(qstat | grep "a3d_[^k]" | wc -l) -ne $(($WORKERS + $PS_NODES)) ]; then
     echo Not all jobs worked properly. Cleaning up queue.
-    qdel -u $(whoami)
+    clean_up
+    make distributed
+    exit
 fi
 
 echo All jobs seem to be fine, idling now.
 
 
 
-dead=0
-while [ $dead -eq 0 ]; do
+num_jobs=$(qstat | grep "a3d_[^k]" | wc -l)
+alive=$num_jobs
+while [ $alive -ne 0 ]; do
     sleep $KEEP_ALIVE_INTERVAL
-    qstat | grep "a3d_[^k]" > /dev/null # Still running nodes?
-    dead=$?
+    alive=$(qstat | grep "a3d_[^k]" | wc -l)
+    if [ $alive -ne $num_jobs ]; then
+        echo Some jobs died! Cleaning up queue and restarting.
+        clean_up
+        make distributed
+        exit
+    fi
 done
 echo All jobs vanished from queue.
 
@@ -99,5 +112,5 @@ if [ -f "$REPORT_FILE" ]; then
     rm $REPORT_FILE
 else
     echo "Resubmitting job."
-    CONT=--cont make distributed
+    make distributed
 fi

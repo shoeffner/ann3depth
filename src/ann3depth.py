@@ -60,7 +60,6 @@ def main():
         chief = args.task_index == 0
 
         logger.info(f'Task: {args.task_index} -- Chief? {chief}')
-        logger.info(f'Continue? {args.cont}.')
 
         ckptdir = str(os.path.join(args.ckptdir, args.model))
         logger.info(f'Checkpoint dir is {ckptdir}.')
@@ -104,9 +103,8 @@ def main():
         ]
 
         if args.job_name != 'local':
-            timeout = args.timeout if not chief else int(args.timeout * 1.1)
-            logger.info(f'Starting alarm: {timeout} s timeout.')
-            signal.alarm(timeout)
+            logger.info(f'Starting alarm: {args.timeout} s timeout.')
+            signal.alarm(args.timeout)
 
         logger.info('Starting session.')
         with tf.train.MonitoredTrainingSession(
@@ -204,8 +202,6 @@ def parse_args():
                         help='Create a summary every N seconds.')
     parser.add_argument('--datadir', '-d', default='data', type=str,
                         help='The data directory containing the datasets.')
-    parser.add_argument('--cont', '-c', action='store_true',
-                        help='Continue from checkpoint')
     parser.add_argument('--timeout', '-k', default=4200, type=int,
                         help='The time after which the process dies.')
     parser.add_argument('--cluster-spec', default='', type=str,

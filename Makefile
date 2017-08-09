@@ -35,7 +35,6 @@ SUM_FREQ ?= 300
 CKPT_FREQ ?= 900
 CKPT_DIR := checkpoints
 TIMEOUT ?= 4200
-CONT ?=
 
 # Preprocessing parameters
 WIDTH ?= 640
@@ -48,7 +47,7 @@ LIMIT ?=
 
 SCRIPT := python3 -O src/ann3depth.py
 COMMON_PARAMETERS := --ckptdir=${CKPT_DIR} --datadir=${DATA_DIR} --model=${MODEL} ${CLUSTER_PARAMS}
-TRAIN_PARAMETERS := --steps=${STEPS} --batchsize=${BATCHSIZE} --ckptfreq=${CKPT_FREQ} --sumfreq=${SUM_FREQ} --timeout=${TIMEOUT} ${CONT}
+TRAIN_PARAMETERS := --steps=${STEPS} --batchsize=${BATCHSIZE} --ckptfreq=${CKPT_FREQ} --sumfreq=${SUM_FREQ} --timeout=${TIMEOUT}
 
 # Check if download is wanted, and if so, set dataset names
 # see http://stackoverflow.com/a/14061796/3004221
@@ -77,17 +76,11 @@ endif
 train: ${DATA_DIR}
 	${SCRIPT} ${COMMON_PARAMETERS} ${TRAIN_PARAMETERS} ${DATASET}
 
-# Reloads a checkpoint and continues training
-.PHONY: continue
-continue: data
-	${SCRIPT} --cont ${COMMON_PARAMETERS} ${TRAIN_PARAMETERS} ${DATASET}
-
 # Submit a grid training job
 .DEFAULT: distributed
 .PHONY: distributed
 distributed: ${LOG_DIR} ./tools/grid/startup.sh
-	PS_NODES=${PS_NODES} WORKERS=${WORKERS} CONDAENV=${CONDAENV} MODEL=${MODEL} STEPS=${STEPS} BATCHSIZE=${BATCHSIZE} DATASET=${DATASET} CKPT_DIR=${CKPT_DIR} CKPT_FREQ=${CKPT_FREQ} SUM_FREQ=${SUM_FREQ} DATA_DIR=${DATA_DIR} TIMEOUT=${TIMEOUT} CONT=${CONT} qsub ./tools/grid/distributed_master.sge
-
+	PS_NODES=${PS_NODES} WORKERS=${WORKERS} CONDAENV=${CONDAENV} MODEL=${MODEL} STEPS=${STEPS} BATCHSIZE=${BATCHSIZE} DATASET=${DATASET} CKPT_DIR=${CKPT_DIR} CKPT_FREQ=${CKPT_FREQ} SUM_FREQ=${SUM_FREQ} DATA_DIR=${DATA_DIR} TIMEOUT=${TIMEOUT} qsub ./tools/grid/distributed_master.sge
 
 
 ####### HELPER ##########

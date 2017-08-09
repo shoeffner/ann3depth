@@ -116,7 +116,7 @@ def estimate_size_of(graphkey):
                 for v in tf.get_collection(graphkey)]) * 4 / 1024 / 1024
 
 
-def create_summary_hook(graphkey, ckptdir, steps=100, summary='scalar'):
+def create_summary_hook(graphkey, ckptdir, steps=100):
     """Adds a summary hook with scalar summaries of tensor values for
     tensors inside the collection of graphkey.
 
@@ -132,11 +132,7 @@ def create_summary_hook(graphkey, ckptdir, steps=100, summary='scalar'):
     summaries = []
     for tensor in tensors:
         name = '/'.join(tensor.name.split('/')[0:2]).split(':')[0]
-        if summary == 'scalar':
-            s = tf.summary.scalar(name, tensor, [])
-        else:
-            s = tf.summary.tensor_summary(name, tensor, None, [])
-        summaries.append(s)
+        summaries.append(tf.summary.scalar(name, tensor, []))
     summary_op = tf.summary.merge(summaries)
     return tf.train.SummarySaverHook(save_steps=steps,
                                      output_dir=ckptdir,
