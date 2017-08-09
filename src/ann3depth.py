@@ -62,12 +62,8 @@ def main():
         logger.info(f'Task: {args.task_index} -- Chief? {chief}')
         logger.info(f'Continue? {args.cont}.')
 
-        ckptdir = None
-        if chief:
-            ckptdir = determine_checkpoint_dir(args.ckptdir,
-                                               args.model,
-                                               args.cont)
-            logger.info(f'Checkpoint dir is {ckptdir}.')
+        ckptdir = str(os.path.join(args.ckptdir, args.model))
+        logger.info(f'Checkpoint dir is {ckptdir}.')
 
         logger.info('Setting up replica settings.')
         ps_strategy = None
@@ -88,7 +84,7 @@ def main():
             model_train_op = getattr(models, args.model)(inputs, targets)
 
             size_train = tfhelper.estimate_size_of(tf.GraphKeys.TRAINABLE_VARIABLES)
-            logger.debug(f'Trainable variables have {size_train:.1f} MB')
+            logger.debug(f'Trainable variables have about {size_train:.1f} MB')
 
         logger.info('Setting up config.')
         config = tf.ConfigProto(
@@ -107,7 +103,7 @@ def main():
         with tf.train.MonitoredTrainingSession(
                 master=server.target,
                 is_chief=chief,
-                checkpoint_dir=ckptdir,
+                checkpoint_dir=ckptdir if chief else None,
                 scaffold=None,
                 hooks=hooks,
                 chief_only_hooks=None,
@@ -211,30 +207,6 @@ def create_ps_notifier(cluster_spec):
         return tf.no_op()
     return [create_done_queue(i, num_workers).enqueue(1) for i in range(num_ps)]
 
-
-def determine_checkpoint_dir(ckptdir, model, cont=False):
-    """Determines which checkpoint directory to use.
-
-    If training continues, this selects a directory
-        ckptdir/model/x
-    where x is the last available number.
-    If not, it creates a directory x+1, or 0 if none
-    exists yet.
-
-    Args:
-        ckptdir: The base directory for checkpoints.
-        model: The model name.
-        cont: If True, uses an existing directory.
-
-    Return a checkpoint directory.
-    """
-    ckptdir = os.path.join(ckptdir, model)
-    try:
-        runs = os.listdir(ckptdir)
-    except FileNotFoundError:
-        runs = []
-    num = len(runs) - (1 if cont and runs else 0)
-    return os.path.join(ckptdir, str(num))
 
 def parse_args():
     """Parses arguments.
