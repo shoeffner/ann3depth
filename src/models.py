@@ -130,57 +130,43 @@ class _DistributedConvolutionalNeuralFields:
     @tfhelper.with_scope('loss')
     def loss_part(self, target, z, r):
         superpixels = self.superpixels(target)
-        y_sp = tf.reduce_mean(superpixels, axis=2)
-        loss_unary = tf.losses.mean_squared_error(y_sp, z,
-                                                  scope='unary')
-
+        y = tf.reduce_mean(superpixels, axis=2)
         pairs = self.pair_indices(target)
-        y_p = tf.map_fn(lambda batch: tf.gather(batch, pairs[0]), y_sp)
-        y_q = tf.map_fn(lambda batch: tf.gather(batch, pairs[1]), y_sp)
 
-        loss_pairwise = tf.losses.mean_squared_error(y_p, y_q, r,
-                                                     scope='pairwise')
-
-        # E(y, x)
-        energy = loss_unary + loss_pairwise
-
-        # Integral exp( -E(y, x) ) dy
-
-        def get_A(batch, R):
-            I = tf.eye(len(pairs[0]))
-            p = tf.gather(batch, pairs[0])
-            q = tf.gather(batch, pairs[1])
-            R = tf.scatter_nd_update(R, [*zip(*pairs)], tf.squeeze(p - q))
-            R = tf.scatter_nd_update(R, [*zip(*pairs[::-1])], tf.squeeze(q - p))
+        # See Liu et al. (2015) p. 5, eq. (9) - (11)
+        def get_A(batch_item, R):
+            I = tf.eye(int(R.shape[0]))
+            R = tf.scatter_nd_update(R, list(zip(*pairs)),
+                                     tf.squeeze(batch_item))
+            R = tf.scatter_nd_update(R, list(zip(*pairs[::-1])),
+                                     tf.squeeze(batch_item))
             D = tf.diag(tf.reduce_sum(R, axis=1))
             return I + D - R
         # n.b.: define R outside of get_A to avoid UPDATE_OP being placed inside
         # loop (see https://github.com/tensorflow/tensorflow/issues/6087)
-        R = tf.Variable(tf.zeros((len(pairs[0]), len(pairs[1]))),
-                                    trainable=False)
-        A = tf.map_fn(lambda y: get_A(y, R), y_sp)
+        R = tf.Variable(tf.zeros((int(r.shape[1]), int(r.shape[1]))),
+                        trainable=False)
 
-        # TODO: Match all z to superpixels without dropping some
-        def modified_z(z):
-            max_rows, max_cols = self.num_superpixels(target)
-            pixels = []
-            for row in range(1, max_rows - 1):
-                for col in range(2 - (row & 1), max_cols - 1, 2):
-                    for addend in [-max_cols, max_cols, -1, 1]:
-                        pixels.append(row * max_cols + col + addend)
-            return tf.gather(z, pixels)
-        z = tf.map_fn(modified_z, z)
+        # Get reused helpers for loss calculation
+        A = tf.map_fn(lambda y: get_A(y, R), r)
+
         zT = tf.transpose(z, [0, 2, 1])
-        fac = math.pi ** (len(pairs[0]) / 2) / tf.norm(A) ** .5
-        exp = tf.exp(zT @ A @ z - zT @ z)
+        yT = tf.transpose(y, [0, 2, 1])
+
+        # energy = E(y, x)
+        energy = tf.squeeze(yT @ A @ y - 2 * zT @ y + zT @ z)
+
+        # Integral Z(x) = exp( -E(y, x) ) dy
+        fac = math.pi ** (int(r.shape[1]) / 2)
+        fac /= (tf.matrix_determinant(A) ** .5)
+        exp = tf.squeeze(tf.exp(zT @ tf.matrix_inverse(A) @ z - zT @ z))
         Z = fac * exp
-        # Since all other values are reduced to their means, we do so for the
-        # integral as well
-        Z = tf.reduce_mean(Z)
 
         # Neg log-likelihood
-        exp_energy = tf.exp(-energy)
-        loss = -tf.log(exp_energy / Z)
+        loss = -tf.log(tf.exp(-energy) / Z)
+
+        # Mean over batch
+        loss = tf.reduce_mean(loss)
         tf.losses.add_loss(loss)
 
         return loss

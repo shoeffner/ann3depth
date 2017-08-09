@@ -1,6 +1,7 @@
 import functools
 import itertools
 import operator
+import os
 
 import tensorflow as tf
 
@@ -112,6 +113,33 @@ def estimate_size_of(graphkey):
     """
     return sum([functools.reduce(operator.mul, [int(s) for s in v.shape])
                 for v in tf.get_collection(graphkey)]) * 4 / 1024 / 1024
+
+
+def create_summary_hook(graphkey, ckptdir, steps=100, summary='scalar'):
+    """Adds a summary hook with scalar summaries of tensor values for
+    tensors inside the collection of graphkey.
+
+    Args:
+        graphkey: The key which tensors should be summarized.
+        ckptdir: The checkpoint directory.
+        steps: The summary will be stored every N steps.
+
+    Returns:
+        A SummarySaverHook which saves the requested summaries.
+    """
+    tensors = tf.get_collection(graphkey)
+    summaries = []
+    for tensor in tensors:
+        name = '/'.join(tensor.name.split('/')[0:2]).split(':')[0]
+        if summary == 'scalar':
+            s = tf.summary.scalar(name, tensor, [])
+        else:
+            s = tf.summary.tensor_summary(name, tensor, None, [])
+        summaries.append(s)
+    summary_op = tf.summary.merge(summaries)
+    return tf.train.SummarySaverHook(save_steps=steps,
+                                     output_dir=ckptdir,
+                                     summary_op=summary_op)
 
 
 class RoundRobinWorker:

@@ -88,15 +88,14 @@ def main():
 
         logger.info('Setting up config.')
         config = tf.ConfigProto(
-            # device_count={'CPU': 1, 'GPU': 0},
-            # allow_soft_placement=True,
             # log_device_placement=True,
         )
 
         logger.info('Setting up hooks.')
         hooks = [
             tf.train.StopAtStepHook(last_step=args.steps),
-            tf.train.FinalOpsHook(create_ps_notifier(cluster_spec))
+            tf.train.FinalOpsHook(create_ps_notifier(cluster_spec)),
+            tfhelper.create_summary_hook(tf.GraphKeys.LOSSES, ckptdir),
         ]
 
         logger.info('Starting session.')
@@ -181,6 +180,7 @@ def create_done_queue(ps_task, num_workers):
     with tf.device(f'/job:ps/task:{ps_task}'):
         return tf.FIFOQueue(num_workers, tf.int32,
                             shared_name=f'shutdown_ps_{ps_task}')
+
 
 def create_ps_notifier(cluster_spec):
     """Creates ops to stop all ps_tasks eventually, see create_done_queue.
