@@ -46,7 +46,7 @@ FORCE ?=
 START ?= 0
 LIMIT ?=
 
-SCRIPT := python3 src/ann3depth.py
+SCRIPT := python3 -O src/ann3depth.py
 COMMON_PARAMETERS := --ckptdir=${CKPT_DIR} --datadir=${DATA_DIR} --model=${MODEL} ${CLUSTER_PARAMS}
 TRAIN_PARAMETERS := --steps=${STEPS} --batchsize=${BATCHSIZE} --ckptfreq=${CKPT_FREQ} --sumfreq=${SUM_FREQ} --timeout=${TIMEOUT} ${CONT}
 

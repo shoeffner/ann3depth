@@ -2,6 +2,7 @@ import functools
 import itertools
 import operator
 import os
+import signal
 
 import tensorflow as tf
 
@@ -140,6 +141,38 @@ def create_summary_hook(graphkey, ckptdir, steps=100, summary='scalar'):
     return tf.train.SummarySaverHook(save_steps=steps,
                                      output_dir=ckptdir,
                                      summary_op=summary_op)
+
+
+class StopAtSignalHook(tf.train.SessionRunHook):
+    """Hook that requests stop when a signal is received."""
+
+    def __init__(self, signals=None):
+        """Initializes a `StopAtSignalHook`.
+
+        The hook requests stop if one of the specified signals is received.
+
+        Handles by default these signals (if signals is None):
+            SIGUSR1, SIGUSR2, SIGALRM, SIGINT, SIGTERM
+        The list can be overwritten by setting signals manually.
+
+        Args:
+            signals: List of signals to handle.
+        """
+        self.signal_received = 0
+        if signals is None:
+            signals = [signal.SIGUSR1, signal.SIGUSR2,
+                       signal.SIGALRM, signal.SIGINT, signal.SIGTERM]
+        for s in signals:
+            signal.signal(s, self.__signal_handler)
+
+    def __signal_handler(self, signum, frame):
+        """Sets self.signal_received to signum."""
+        self.signal_received = signum
+
+    def after_run(self, run_context, run_values):
+        """If a signal was received, a stop will be requested."""
+        if self.signal_received:
+            run_context.request_stop()
 
 
 class RoundRobinWorker:

@@ -88,15 +88,25 @@ def main():
 
         logger.info('Setting up config.')
         config = tf.ConfigProto(
-            # log_device_placement=True,
+            device_count={'CPU': 1,
+                          'GPU': int(os.environ.get('CUDA_VISIBLE_DEVICES', 1))},
+            allow_soft_placement=True,
+            log_device_placement=__debug__,
         )
 
         logger.info('Setting up hooks.')
+        stop_at_signal_hook = tfhelper.StopAtSignalHook()
         hooks = [
             tf.train.StopAtStepHook(last_step=args.steps),
+            stop_at_signal_hook,
             tf.train.FinalOpsHook(create_ps_notifier(cluster_spec)),
             tfhelper.create_summary_hook(tf.GraphKeys.LOSSES, ckptdir),
         ]
+
+        if args.job_name != 'local':
+            timeout = args.timeout if not chief else int(args.timeout * 1.1)
+            logger.info(f'Starting alarm: {timeout} s timeout.')
+            signal.alarm(timeout)
 
         logger.info('Starting session.')
         with tf.train.MonitoredTrainingSession(
@@ -112,50 +122,13 @@ def main():
                 config=config,
                 stop_grace_period_secs=120,
                 log_step_count_steps=100) as session:
-
-            logger.info('Setting up signal handlers.')
-            stop_reasons = []
-            should_stop = handle_stop(session, stop_reasons, logger)
-            if args.job_name != 'local':
-                logger.info(f'Starting alarm: {args.timeout} s timeout.')
-                signal.alarm(args.timeout)
-
-            while not should_stop():
+            while not session.should_stop():
                 session.run(model_train_op)
-
-        logger.info('Session done.')
-        if stop_reasons:
-            sys.exit(stop_reasons[0])
+        logger.info('Session stopped.')
+        sys.exit(stop_at_signal_hook.signal_received)
     else:
         logger.warning(f'No suitable job description found! {args.job_name}')
 
-
-def handle_stop(session, stop_request_list, logger):
-    """Registers signal handlers and returns a function to check for stop
-    requests.
-
-    Handles these signals:
-        SIGUSR1, SIGUSR2, SIGALRM, SIGINT, SIGTERM
-
-    Args:
-        session: The MonitoredTrainingSession.
-        stop_request_list: A list object to which (side-effect!) the caught
-                           signals will be appended. This can be used to
-                           handle clean session shutdowns with status
-                           codes != 0.
-        logger: The logger (to notify about received signals).
-
-    Returns:
-        A function to check whether the training session should stop or not.
-    """
-    def signal_handler(signum, frame):
-        logger.warning(f'Received signal {signal.Signals(signum).name}.')
-        logger.info(f'Requesting session to stop.')
-        stop_request_list.append(signum)
-    for s in [signal.SIGUSR1, signal.SIGUSR2, signal.SIGALRM, signal.SIGINT,
-              signal.SIGTERM]:
-        signal.signal(s, signal_handler)
-    return lambda: stop_request_list or not session or session.should_stop()
 
 def create_done_queue(ps_task, num_workers):
     """Creates a queue on and for the ps task with the capacity of the number
