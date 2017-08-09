@@ -6,6 +6,7 @@
 /tools/grid/startup.sh
 
 __pycache__
+core
 *.pdf
 
 .idea/
