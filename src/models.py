@@ -218,5 +218,145 @@ class _MNISTTest:
         return optimizer.minimize(loss,
                                   tf.train.get_or_create_global_step())
 
+
+class _MultiScaleDeepNetwork:
+    """Implements Eigen et al. (2014): Depth Map Prediction from a Single Image
+    using a Multi-Scale Deep Network.
+    """
+
+    @tfhelper.variable_scope('coarse')
+    def coarse(self, images):
+        with tf.name_scope('conv'):
+            temp = tf.layers.conv2d(images, 96, 11, (4, 4), activation=tf.nn.relu)
+            temp = tf.layers.max_pooling2d(temp, 2, 2)
+            temp = tf.layers.conv2d(temp, 256, 5, padding='same', activation=tf.nn.relu)
+            temp = tf.layers.max_pooling2d(temp, 2, 2)
+            temp = tf.layers.conv2d(temp, 384, 3, padding='same', activation=tf.nn.relu)
+            temp = tf.layers.conv2d(temp, 384, 3, padding='same', activation=tf.nn.relu)
+            # Note: Added striding to achieve same activation size
+            temp = tf.layers.conv2d(temp, 256, 3, (2, 2), activation=tf.nn.relu)
+
+            temp = tf.reshape(temp, [int(temp.shape[0]), -1])
+
+        with tf.name_scope('dense'):
+            temp = tf.layers.dense(temp, 4096, activation=tf.nn.relu)
+            temp = tf.layers.dropout(temp, training=True)
+            temp = tf.layers.dense(temp, 55 * 74, activation=None)
+
+            temp = tf.reshape(temp, [-1, 55, 74, 1])
+
+        return temp
+
+    @tfhelper.variable_scope('fine')
+    def fine(self, images, coarse):
+        temp = tf.layers.conv2d(images, 63, 9, (2, 2), activation=tf.nn.relu, name='first')
+        temp = tf.layers.max_pooling2d(temp, 2, 2)
+
+        temp = tf.concat([temp, coarse], axis=-1)
+
+        temp = tf.layers.conv2d(temp, 64, 5, padding='same', activation=tf.nn.relu, name='second')
+
+        temp = tf.layers.conv2d(temp, 1, 5, padding='same', activation=None, name='third')
+
+        return temp
+
+    def loss(self, outputs, targets, name):
+        eps = 1e-8
+        lambd = 0.5
+        log_out = tf.log(outputs + eps)
+        log_tar = tf.log(targets + eps)
+
+        l2norm = tf.losses.mean_squared_error(log_out, log_tar,
+                                              loss_collection=[])
+        scaleinv = tf.square(tf.reduce_sum(log_out - log_tar, [1, 2]))
+
+        loss = l2norm - lambd / (74 * 55)  * scaleinv
+
+        # Mean loss for batch
+        loss = tf.reduce_mean(loss, name=name)
+
+        tf.losses.add_loss(loss)
+        return loss
+
+
+    def __call__(self, images, depths):
+        with tf.name_scope('preprocessing'):
+            images = tf.image.resize_images(images, [228, 304])
+            depths = tf.image.resize_images(depths, [55, 74])
+
+        coarse = self.coarse(images)
+        outputs = self.fine(images, coarse)
+
+        with tf.name_scope('loss'):
+            loss_coarse = self.loss(coarse, depths, 'coarse_loss')
+            loss_fine = self.loss(outputs, depths, 'fine_loss')
+
+        global_step = tf.train.get_or_create_global_step()
+        train_vars = tf.GraphKeys.TRAINABLE_VARIABLES
+
+        with tf.name_scope('optimizers'):
+            coarse_conv_optimizer = tf.train.MomentumOptimizer(0.001, 0.9)
+            coarse_conv_variables = tf.get_collection(train_vars, 'coarse/conv')
+            coarse_conv_up_op = coarse_conv_optimizer.minimize(
+                loss_coarse,
+                global_step=global_step,
+                var_list=coarse_conv_variables)
+
+            coarse_dense_optimizer = tf.train.MomentumOptimizer(0.1, 0.9)
+            coarse_dense_variables = tf.get_collection(train_vars, 'coarse/dense')
+            coarse_dense_up_op = coarse_dense_optimizer.minimize(
+                loss_coarse,
+                global_step=None,
+                var_list=coarse_dense_variables)
+
+            fine_optimizer_small = tf.train.MomentumOptimizer(0.001, 0.9)
+            fine_small_variables = tf.get_collection(train_vars, 'fine/first')
+            fine_small_variables += tf.get_collection(train_vars, 'fine/third')
+            fine_small_up_op = fine_optimizer_small.minimize(
+                loss_fine,
+                global_step=global_step,
+                var_list=fine_small_variables)
+
+            fine_optimizer_big = tf.train.MomentumOptimizer(0.01, 0.9)
+            fine_big_variables = tf.get_collection(train_vars, 'fine/second')
+            fine_big_up_op = fine_optimizer_big.minimize(
+                loss_fine,
+                global_step=None,
+                var_list=fine_big_variables)
+
+        coarse_ops = [coarse_conv_up_op, coarse_dense_up_op]
+        fine_ops = [fine_small_up_op, fine_big_up_op]
+
+        samples_coarse = 2000000
+        samples_fine = 1500000
+        batch_size = int(images.shape[0])
+
+        steps_coarse = samples_coarse // batch_size
+        steps_fine = samples_fine // batch_size
+
+        with tf.name_scope('choose_optimizer'):
+            fine_train = tf.cond(global_step < steps_coarse + steps_fine,
+                                lambda: fine_ops,
+                                lambda: [tf.no_op(), tf.no_op()])
+            coarse_train = tf.cond(global_step < steps_coarse,
+                                lambda: coarse_ops,
+                                lambda: fine_train)
+
+        with tf.name_scope('summaries'):
+            tf.summary.image('Input', images, max_outputs=3)
+            tf.summary.image('Coarse', coarse, max_outputs=3)
+            tf.summary.image('Fine', outputs, max_outputs=3)
+            tf.summary.image('Target', depths, max_outputs=3)
+            phase = tf.cond(global_step < steps_coarse + steps_fine,
+                            lambda: 2, lambda: 3)
+            phase = tf.cond(global_step < steps_coarse,
+                            lambda: 1, lambda: phase)
+            tf.summary.scalar('Phase', phase)
+
+
+        return coarse_train
+
+
 dcnf = _DistributedConvolutionalNeuralFields()
 mnist = _MNISTTest()
+msdn = _MultiScaleDeepNetwork()
