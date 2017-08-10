@@ -67,7 +67,25 @@ def make_template(scope=None, create_scope_now_=False, unique_name_=None,
     return make_tf_template
 
 
-def with_scope(scope, *scopeargs, **scopekwargs):
+def name_scope(scope, *scopeargs, **scopekwargs):
+    """A decorator to wrap a function into a tf.name_scope.
+
+    Args:
+        scope: The scope name.
+
+    Returns:
+        The wrapped function.
+    """
+    def add_scope(function):
+        @functools.wraps(function)
+        def wrapper(*args, **kwargs):
+            with tf.name_scope(scope, *scopeargs, **scopekwargs):
+                return function(*args, **kwargs)
+        return wrapper
+    return add_scope
+
+
+def variable_scope(scope, *scopeargs, **scopekwargs):
     """A decorator to wrap a function into a tf.variable_scope.
 
     Args:

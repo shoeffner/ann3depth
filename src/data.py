@@ -32,7 +32,7 @@ def _get_pipeline(dataset):
     return pipelines.get(dataset, default)
 
 
-@tfhelper.with_scope('input')
+@tfhelper.name_scope('input')
 def inputs(datadir, dataset, batch_size=32, train_or_test='train'):
     pipeline = _get_pipeline(dataset)
     base_dir = os.path.join(datadir, dataset)
@@ -89,10 +89,6 @@ def _convert_img_depth(key, record, *args):
     depth = tf.decode_raw(example['depth'], tf.float32)
     image = tf.reshape(image, [480, 640, 3])
     depth = tf.reshape(depth, [480, 640, 1])
-
-    # Make static size
-    image = tf.image.resize_images(image, [240, 320])
-    depth = tf.image.resize_images(depth, [240, 320])
     return image, depth
 
 

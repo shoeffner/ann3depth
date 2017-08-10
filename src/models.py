@@ -33,7 +33,7 @@ class _DistributedConvolutionalNeuralFields:
         cols = math.ceil(int(images.shape[2]) / self.sp_size[1])
         return rows, cols
 
-    @tfhelper.with_scope('extract_superpixel')
+    @tfhelper.variable_scope('extract_superpixel')
     def superpixels(self, images):
         # TODO: over-segmentation instead of simple extraction
         superpixels = tf.extract_image_patches(images=images,
@@ -46,7 +46,7 @@ class _DistributedConvolutionalNeuralFields:
                                         self.sp_size[0] * self.sp_size[1],
                                         int(images.shape[-1])))
 
-    @tfhelper.with_scope('extract_patch')
+    @tfhelper.variable_scope('extract_patch')
     def patches(self, images):
         # TODO: use superpixels for patch calculation
         patches = tf.extract_image_patches(images=images,
@@ -81,7 +81,7 @@ class _DistributedConvolutionalNeuralFields:
             temp = tf.layers.dense(temp, 1, activation=None)
         return temp
 
-    @tfhelper.with_scope('unary',
+    @tfhelper.variable_scope('unary',
                          partitioner=tf.variable_axis_size_partitioner((64 << 20) -1))
     def unary_part(self, images):
         patches = self.patches(images)
@@ -91,20 +91,20 @@ class _DistributedConvolutionalNeuralFields:
     def pairwise_dense(self, similarities):
         return tf.layers.dense(similarities, 1, activation=None)
 
-    @tfhelper.with_scope('histogram')
+    @tfhelper.variable_scope('histogram')
     def color_histogram(self, superpixel):
         values = tf.reduce_sum(superpixel * (16777216., 65536., 256.), axis=-1)
         histogram = tf.histogram_fixed_width(values, (0, 16777216.),
                                              256, tf.float32)
         return histogram
 
-    @tfhelper.with_scope('similarity')
+    @tfhelper.variable_scope('similarity')
     def similarity(self, features, pairs):
         left = tf.map_fn(lambda batch: tf.gather(batch, pairs[0]), features)
         right = tf.map_fn(lambda batch: tf.gather(batch, pairs[1]), features)
         return tf.exp(-self.gamma * tf.norm(left - right, axis=2))
 
-    @tfhelper.with_scope('pairwise',
+    @tfhelper.variable_scope('pairwise',
                          partitioner=tf.variable_axis_size_partitioner((64 << 20) -1))
     def pairwise_part(self, images):
         superpixels = self.superpixels(images)
@@ -125,7 +125,7 @@ class _DistributedConvolutionalNeuralFields:
 
         return tf.map_fn(self.pairwise_dense, similarities)
 
-    @tfhelper.with_scope('loss')
+    @tfhelper.variable_scope('loss')
     def loss_part(self, target, z, r):
         superpixels = self.superpixels(target)
         y = tf.reduce_mean(superpixels, axis=2)
@@ -163,7 +163,7 @@ class _DistributedConvolutionalNeuralFields:
             fac /= (tf.matrix_determinant(A) ** .5) + self.epsilon
             inverseA = tf.matrix_inverse(A) + self.epsilon
             exp = tf.squeeze(tf.exp(zT @ inverseA @ z - zT @ z))
-            Z = fac * exp
+            Z = fac * exp + self.epsilon
 
         # Neg log-likelihood
         with tf.name_scope('nll'):
@@ -176,6 +176,9 @@ class _DistributedConvolutionalNeuralFields:
         return loss
 
     def __call__(self, images, depths):
+        images = tf.image.resize_images(images, [240, 320])
+        depths = tf.image.resize_images(depths, [240, 320])
+
         z = self.unary_part(images)
         r = self.pairwise_part(images)
         loss = self.loss_part(depths, z, r)
@@ -194,8 +197,6 @@ class _DistributedConvolutionalNeuralFields:
         optimizer = tf.train.GradientDescentOptimizer(0.1)
         return optimizer.minimize(loss,
                                   tf.train.get_or_create_global_step())
-
-dcnf = _DistributedConvolutionalNeuralFields()
 
 
 class _MNISTTest:
@@ -217,4 +218,5 @@ class _MNISTTest:
         return optimizer.minimize(loss,
                                   tf.train.get_or_create_global_step())
 
+dcnf = _DistributedConvolutionalNeuralFields()
 mnist = _MNISTTest()
