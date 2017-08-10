@@ -14,6 +14,7 @@ class _DistributedConvolutionalNeuralFields:
         self.patch_size = (100, 100)  # Liu et al.: 224x224
         self.sp_size = (40, 40)  # Liu et al.: super pixels, not patches
         self.gamma = 1
+        self.epsilon = 1e-7  # For numerical stability
 
     def pair_indices(self, images):
         max_rows, max_cols = self.num_superpixels(images)
@@ -139,14 +140,15 @@ class _DistributedConvolutionalNeuralFields:
                                      tf.squeeze(batch_item))
             D = tf.diag(tf.reduce_sum(R, axis=1))
             return I + D - R
-        # n.b.: define R outside of get_A to avoid UPDATE_OP being placed inside
-        # loop (see https://github.com/tensorflow/tensorflow/issues/6087)
-        R = tf.Variable(tf.zeros((int(r.shape[1]), int(r.shape[1]))),
-                        trainable=False)
 
         # Get reused helpers for loss calculation
         with tf.name_scope('calc_A'):
-            A = tf.map_fn(lambda y: get_A(y, R), r)
+            # Define R outside of get_A to avoid UPDATE_OP being placed inside
+            # loop (see https://github.com/tensorflow/tensorflow/issues/6087)
+            R = tf.Variable(tf.zeros((int(r.shape[1]), int(r.shape[1]))),
+                            trainable=False)
+            A = tf.map_fn(lambda y: get_A(y, R), r,
+                          parallel_iterations=1)
 
         zT = tf.transpose(z, [0, 2, 1])
         yT = tf.transpose(y, [0, 2, 1])
@@ -158,13 +160,14 @@ class _DistributedConvolutionalNeuralFields:
         # Integral Z(x) = exp( -E(y, x) ) dy
         with tf.name_scope('integral'):
             fac = math.pi ** (int(r.shape[1]) / 2)
-            fac /= (tf.matrix_determinant(A) ** .5)
-            exp = tf.squeeze(tf.exp(zT @ tf.matrix_inverse(A) @ z - zT @ z))
+            fac /= (tf.matrix_determinant(A) ** .5) + self.epsilon
+            inverseA = tf.matrix_inverse(A) + self.epsilon
+            exp = tf.squeeze(tf.exp(zT @ inverseA @ z - zT @ z))
             Z = fac * exp
 
         # Neg log-likelihood
         with tf.name_scope('nll'):
-            loss = -tf.log(tf.exp(-energy) / Z)
+            loss = -tf.log(tf.exp(-energy) / Z + self.epsilon)
 
         # Mean over batch
         loss = tf.reduce_mean(loss, name='mean_loss')
