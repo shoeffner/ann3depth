@@ -99,7 +99,8 @@ def main():
             tf.train.StopAtStepHook(last_step=args.steps),
             stop_at_signal_hook,
             tf.train.FinalOpsHook(create_ps_notifier(cluster_spec)),
-            tfhelper.create_summary_hook(tf.GraphKeys.LOSSES, ckptdir),
+            tfhelper.create_summary_hook(tf.GraphKeys.LOSSES, ckptdir,
+                                         args.sumfreq),
         ]
 
         if args.job_name != 'local':
@@ -198,7 +199,7 @@ def parse_args():
                         help='Checkpoint directory')
     parser.add_argument('--ckptfreq', '-f', default=900, type=int,
                         help='Create a checkpoint every N seconds.')
-    parser.add_argument('--sumfreq', '-r', default=300, type=int,
+    parser.add_argument('--sumfreq', '-r', default=150, type=int,
                         help='Create a summary every N seconds.')
     parser.add_argument('--datadir', '-d', default='data', type=str,
                         help='The data directory containing the datasets.')

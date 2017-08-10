@@ -67,8 +67,8 @@ def make_template(scope=None, create_scope_now_=False, unique_name_=None,
     return make_tf_template
 
 
-def with_scope(scope):
-    """A decorator to wrap a function into a tf.name_scope.
+def with_scope(scope, *scopeargs, **scopekwargs):
+    """A decorator to wrap a function into a tf.variable_scope.
 
     Args:
         scope: The scope name.
@@ -79,7 +79,7 @@ def with_scope(scope):
     def add_scope(function):
         @functools.wraps(function)
         def wrapper(*args, **kwargs):
-            with tf.name_scope(scope):
+            with tf.variable_scope(scope, *scopeargs, **scopekwargs):
                 return function(*args, **kwargs)
         return wrapper
     return add_scope
@@ -116,7 +116,7 @@ def estimate_size_of(graphkey):
                 for v in tf.get_collection(graphkey)]) * 4 / 1024 / 1024
 
 
-def create_summary_hook(graphkey, ckptdir, steps=100):
+def create_summary_hook(graphkey, ckptdir, secs=150):
     """Adds a summary hook with scalar summaries of tensor values for
     tensors inside the collection of graphkey.
 
@@ -134,7 +134,7 @@ def create_summary_hook(graphkey, ckptdir, steps=100):
         name = '/'.join(tensor.name.split('/')[0:2]).split(':')[0]
         summaries.append(tf.summary.scalar(name, tensor, []))
     summary_op = tf.summary.merge(summaries)
-    return tf.train.SummarySaverHook(save_steps=steps,
+    return tf.train.SummarySaverHook(save_secs=secs,
                                      output_dir=ckptdir,
                                      summary_op=summary_op)
 

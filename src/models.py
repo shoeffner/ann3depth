@@ -56,7 +56,7 @@ class _DistributedConvolutionalNeuralFields:
         return tf.reshape(patches, (int(images.shape[0]), -1, *self.patch_size,
                                     int(images.shape[-1])))
 
-    @tfhelper.make_template('unary/patch')
+    @tfhelper.make_template('unary_layers')
     def unary_part_patch(self, image_patch):
         with tf.device('/job:worker/task:1'):
             temp = tf.layers.conv2d(image_patch, 64, 11, activation=tf.nn.relu)
@@ -80,52 +80,49 @@ class _DistributedConvolutionalNeuralFields:
             temp = tf.layers.dense(temp, 1, activation=None)
         return temp
 
-    @tfhelper.with_scope('unary')
+    @tfhelper.with_scope('unary',
+                         partitioner=tf.variable_axis_size_partitioner((64 << 20) -1))
     def unary_part(self, images):
-        with tf.variable_scope('unary/partition',
-                               partitioner=tf.variable_axis_size_partitioner((64 << 20) -1)):
+        patches = self.patches(images)
+        return tf.map_fn(self.unary_part_patch, patches)
 
-            patches = self.patches(images)
-            return tf.map_fn(self.unary_part_patch, patches)
-
-    @tfhelper.make_template('pairwise/dense')
+    @tfhelper.make_template('pairwise_layers')
     def pairwise_dense(self, similarities):
         return tf.layers.dense(similarities, 1, activation=None)
 
-    @tfhelper.with_scope('pairwise/histogram')
+    @tfhelper.with_scope('histogram')
     def color_histogram(self, superpixel):
         values = tf.reduce_sum(superpixel * (16777216., 65536., 256.), axis=-1)
         histogram = tf.histogram_fixed_width(values, (0, 16777216.),
                                              256, tf.float32)
         return histogram
 
-    @tfhelper.with_scope('pairwise/similarity')
+    @tfhelper.with_scope('similarity')
     def similarity(self, features, pairs):
         left = tf.map_fn(lambda batch: tf.gather(batch, pairs[0]), features)
         right = tf.map_fn(lambda batch: tf.gather(batch, pairs[1]), features)
         return tf.exp(-self.gamma * tf.norm(left - right, axis=2))
 
-    @tfhelper.with_scope('pairwise')
+    @tfhelper.with_scope('pairwise',
+                         partitioner=tf.variable_axis_size_partitioner((64 << 20) -1))
     def pairwise_part(self, images):
-        with tf.variable_scope('pairwise/partition',
-                               partitioner=tf.variable_axis_size_partitioner((64 << 20) -1)):
-            superpixels = self.superpixels(images)
-            pairs = self.pair_indices(images)
+        superpixels = self.superpixels(images)
+        pairs = self.pair_indices(images)
 
-            histograms = tf.map_fn(lambda batch: tf.map_fn(self.color_histogram,
-                                                        batch), superpixels)
+        histograms = tf.map_fn(lambda batch: tf.map_fn(self.color_histogram,
+                                                    batch), superpixels)
 
-            # color difference similarity
-            cdiff_sim = self.similarity(tf.reduce_mean(superpixels, axis=-1),
-                                        pairs)
-            # color histogram similarity
-            histdiff_sim = self.similarity(histograms, pairs)
-            # TODO: texture disparity
+        # color difference similarity
+        cdiff_sim = self.similarity(tf.reduce_mean(superpixels, axis=-1),
+                                    pairs)
+        # color histogram similarity
+        histdiff_sim = self.similarity(histograms, pairs)
+        # TODO: texture disparity
 
-            # gather similarities
-            similarities = tf.stack([cdiff_sim, histdiff_sim], axis=-1)
+        # gather similarities
+        similarities = tf.stack([cdiff_sim, histdiff_sim], axis=-1)
 
-            return tf.map_fn(self.pairwise_dense, similarities)
+        return tf.map_fn(self.pairwise_dense, similarities)
 
     @tfhelper.with_scope('loss')
     def loss_part(self, target, z, r):
@@ -148,25 +145,29 @@ class _DistributedConvolutionalNeuralFields:
                         trainable=False)
 
         # Get reused helpers for loss calculation
-        A = tf.map_fn(lambda y: get_A(y, R), r)
+        with tf.name_scope('calc_A'):
+            A = tf.map_fn(lambda y: get_A(y, R), r)
 
         zT = tf.transpose(z, [0, 2, 1])
         yT = tf.transpose(y, [0, 2, 1])
 
         # energy = E(y, x)
-        energy = tf.squeeze(yT @ A @ y - 2 * zT @ y + zT @ z)
+        with tf.name_scope('energy'):
+            energy = tf.squeeze(yT @ A @ y - 2 * zT @ y + zT @ z)
 
         # Integral Z(x) = exp( -E(y, x) ) dy
-        fac = math.pi ** (int(r.shape[1]) / 2)
-        fac /= (tf.matrix_determinant(A) ** .5)
-        exp = tf.squeeze(tf.exp(zT @ tf.matrix_inverse(A) @ z - zT @ z))
-        Z = fac * exp
+        with tf.name_scope('integral'):
+            fac = math.pi ** (int(r.shape[1]) / 2)
+            fac /= (tf.matrix_determinant(A) ** .5)
+            exp = tf.squeeze(tf.exp(zT @ tf.matrix_inverse(A) @ z - zT @ z))
+            Z = fac * exp
 
         # Neg log-likelihood
-        loss = -tf.log(tf.exp(-energy) / Z)
+        with tf.name_scope('nll'):
+            loss = -tf.log(tf.exp(-energy) / Z)
 
         # Mean over batch
-        loss = tf.reduce_mean(loss)
+        loss = tf.reduce_mean(loss, name='mean_loss')
         tf.losses.add_loss(loss)
 
         return loss
