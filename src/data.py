@@ -87,8 +87,8 @@ def _convert_img_depth(key, record, *args):
 
     image = tf.decode_raw(example['image'], tf.float32)
     depth = tf.decode_raw(example['depth'], tf.float32)
-    image = tf.reshape(image, [480, 640, 3])
-    depth = tf.reshape(depth, [480, 640, 1])
+    image = tf.reshape(image, [480, 640, 3]) + .5
+    depth = tf.reshape(depth, [480, 640, 1]) + .5
     return image, depth
 
 
@@ -101,7 +101,7 @@ def _convert_mnist(key, record, label):
 
     # Make static size
     image = tf.image.resize_images(image, [28, 28])
-    image = tf.cast(image, tf.float32) / 255. - .5
+    image = tf.cast(image, tf.float32) / 255.
     label = tf.parse_single_example(record, features={
                 'label': tf.FixedLenFeature([], tf.string),
             })
