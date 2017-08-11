@@ -5,7 +5,7 @@ LOG_DIR := ./grid_logs
 TB_PORT ?= 5003
 
 # Grid parameters
-CONDAENV ?= asuckro-shoeffner-ann3depth
+CONDAENV ?= ann3depth
 PS_NODES ?= 0
 WORKERS ?= 1
 ifdef GRID_QUEUES

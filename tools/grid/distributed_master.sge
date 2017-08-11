@@ -23,7 +23,8 @@ function clean_up {
 }
 
 
-source activate $CONDAENV
+source activate ${CONDAENV-ann3depth}-CPU
+echo Active conda environment: $(conda info --envs | grep \*)
 
 
 # Determine available hosts.
