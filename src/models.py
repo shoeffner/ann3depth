@@ -261,14 +261,19 @@ class _MultiScaleDeepNetwork:
         return temp
 
     def loss(self, outputs, targets, name):
+        outputs = tf.reshape(outputs, [int(outputs.shape[0]), -1])
+        targets = tf.reshape(targets, [int(targets.shape[0]), -1])
+
         eps = 1e-8
         lambd = 0.5
         log_out = tf.log(outputs + eps)
+        log_out = tf.where(tf.is_nan(log_out), tf.zeros_like(log_out), log_out)
         log_tar = tf.log(targets + eps)
+        log_tar = tf.where(tf.is_nan(log_tar), tf.zeros_like(log_tar), log_tar)
 
         l2norm = tf.losses.mean_squared_error(log_out, log_tar,
                                               loss_collection=[])
-        scaleinv = tf.square(tf.reduce_sum(log_out - log_tar, [1, 2]))
+        scaleinv = tf.square(tf.reduce_sum(log_out - log_tar, 1))
 
         loss = l2norm - lambd / (74 * 55)  * scaleinv
 
@@ -335,10 +340,12 @@ class _MultiScaleDeepNetwork:
         steps_fine = samples_fine // batch_size
 
         with tf.name_scope('choose_optimizer'):
-            fine_train = tf.cond(global_step < steps_coarse + steps_fine,
+            cond_coarse = global_step < steps_coarse
+            cond_fine = global_step < steps_coarse + steps_fine
+            fine_train = tf.cond(cond_fine,
                                 lambda: fine_ops,
                                 lambda: [tf.no_op(), tf.no_op()])
-            coarse_train = tf.cond(global_step < steps_coarse,
+            coarse_train = tf.cond(cond_coarse,
                                 lambda: coarse_ops,
                                 lambda: fine_train)
 
@@ -347,12 +354,9 @@ class _MultiScaleDeepNetwork:
             tf.summary.image('Coarse', coarse, max_outputs=3)
             tf.summary.image('Fine', outputs, max_outputs=3)
             tf.summary.image('Target', depths, max_outputs=3)
-            phase = tf.cond(global_step < steps_coarse + steps_fine,
-                            lambda: 2, lambda: 3)
-            phase = tf.cond(global_step < steps_coarse,
-                            lambda: 1, lambda: phase)
+            phase = tf.cond(cond_fine, lambda: 2, lambda: 3)
+            phase = tf.cond(cond_coarse, lambda: 1, lambda: phase)
             tf.summary.scalar('Phase', phase)
-
 
         return coarse_train
 
