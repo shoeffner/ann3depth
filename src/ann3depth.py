@@ -50,10 +50,18 @@ def main():
                              job_name=args.job_name,
                              task_index=args.task_index)
 
+    logger.info('Setting up config.')
+    config = tf.ConfigProto(
+        device_count={'CPU': 1,
+                      'GPU': int(os.environ.get('CUDA_VISIBLE_DEVICES', 1))},
+        allow_soft_placement=True,
+        log_device_placement=__debug__,
+    )
+
     if args.job_name == 'ps':
         logger.info('Starting ps job.')
         queue = create_done_queue(args.task_index, len(cluster_spec['worker']))
-        with tf.Session(server.target) as session:
+        with tf.Session(server.target, config=config) as session:
             for i in range(len(cluster_spec['worker'])):
                 session.run(queue.dequeue())
     elif args.job_name in ['worker', 'local']:
@@ -85,14 +93,6 @@ def main():
 
             size_train = tfhelper.estimate_size_of(tf.GraphKeys.TRAINABLE_VARIABLES)
             logger.debug(f'Trainable variables have about {size_train:.1f} MB')
-
-        logger.info('Setting up config.')
-        config = tf.ConfigProto(
-            device_count={'CPU': 1,
-                          'GPU': int(os.environ.get('CUDA_VISIBLE_DEVICES', 1))},
-            allow_soft_placement=True,
-            log_device_placement=__debug__,
-        )
 
         logger.info('Setting up hooks.')
         stop_at_signal_hook = tfhelper.StopAtSignalHook()
