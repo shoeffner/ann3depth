@@ -21,13 +21,16 @@ def parse_args():
 
 def convert_memory(value):
     factor = {'b': 1e0, 'k': 1e3, 'm': 1e6, 'g': 1e9}
-    return float(value[:-1]) * factor[value[-1].lower()]
+    try:
+        return float(value[:-1]) * factor[value[-1].lower()]
+    except ValueError:
+        return 0
 
 
 def parse_info_table(hostlist):
     result = []
-    qhost = subprocess.run(' '.join(['qhost', '-F', 'cuda_cores',
-                            '-h cippy01', ','.join(hostlist)]),
+    qhost = subprocess.run(' '.join(['qhost', '-F', 'cuda_cores', '-q',
+                            '-h', ','.join(hostlist)]),
                            stdout=subprocess.PIPE, encoding='utf-8',
                            shell=True).stdout.splitlines()
     for line in qhost:
@@ -38,11 +41,22 @@ def parse_info_table(hostlist):
                 'cpu': values[2],
                 'cuda': 0,
                 'memory': convert_memory(values[4]),
-                'memory-human': values[4]
+                'memory-human': values[4],
+                'queues': []
             })
         elif values[0] == 'Host':
             result[-1]['cuda'] = int(float(values[2].rsplit('=', 1)[-1]))
+        elif len(values) > 1 and values[1] == 'BIP':
+            result[-1]['queues'].append(values[0])
     return result
+
+
+def remove_invalid_queues(hosts_info):
+    allowed_queues = os.environ.get('GRID_QUEUES', '')
+    if allowed_queues:
+        allowed_queues = set(allowed_queues.split(','))
+        hosts_info = [h for h in hosts_info if set(h['queues']) & allowed_queues]
+    return hosts_info
 
 
 def split_hosts(hosts, workers, ps):
@@ -98,6 +112,8 @@ def dump_cluster_spec(cluster_spec):
 def main():
     args = parse_args()
     hosts_info = parse_info_table(args.hosts)
+
+    hosts_info = remove_invalid_queues(hosts_info)
 
     workers, ps = split_hosts(hosts_info, args.workers, args.ps_nodes)
 
