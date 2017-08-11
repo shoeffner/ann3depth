@@ -61,7 +61,8 @@ def main():
 
         logger.info(f'Task: {args.task_index} -- Chief? {chief}')
 
-        ckptdir = str(os.path.join(args.ckptdir, args.model))
+        run_id = args.model + ('' if not args.id else f'_{args.id}')
+        ckptdir = str(os.path.join(args.ckptdir, run_id))
         logger.info(f'Checkpoint dir is {ckptdir}.')
 
         logger.info('Setting up replica settings.')
@@ -197,6 +198,8 @@ def parse_args():
                         help='Batchsize')
     parser.add_argument('--ckptdir', '-p', default='checkpoints',
                         help='Checkpoint directory')
+    parser.add_argument('--id', default='', type=str,
+                        help='Checkpoint path suffix.')
     parser.add_argument('--ckptfreq', '-f', default=900, type=int,
                         help='Create a checkpoint every N seconds.')
     parser.add_argument('--sumfreq', '-r', default=150, type=int,

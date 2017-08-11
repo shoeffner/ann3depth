@@ -35,6 +35,7 @@ CLUSTER_PARAMS ?= ${CLUSTER_PARAM1} ${CLUSTER_PARAM2} ${CLUSTER_PARAM3}
 
 # Default training parameters
 MODEL ?= dcnf
+RUNID ?= ''
 STEPS ?= 10000000
 BATCHSIZE ?= 32
 DATASET ?= nyu
@@ -53,7 +54,7 @@ START ?= 0
 LIMIT ?=
 
 SCRIPT := python3 -O src/ann3depth.py
-COMMON_PARAMETERS := --ckptdir=${CKPT_DIR} --datadir=${DATA_DIR} --model=${MODEL} ${CLUSTER_PARAMS}
+COMMON_PARAMETERS := --ckptdir=${CKPT_DIR} --datadir=${DATA_DIR} --model=${MODEL} ${CLUSTER_PARAMS} --id=${RUNID}
 TRAIN_PARAMETERS := --steps=${STEPS} --batchsize=${BATCHSIZE} --ckptfreq=${CKPT_FREQ} --sumfreq=${SUM_FREQ} --timeout=${TIMEOUT}
 
 # Check if download is wanted, and if so, set dataset names
