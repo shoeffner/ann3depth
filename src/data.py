@@ -51,8 +51,8 @@ def inputs(datadir, dataset, batch_size=32, train_or_test='train'):
     input_, target = pipeline.convert(*record)
     return tf.train.shuffle_batch([input_, target],
                                   batch_size=batch_size,
-                                  capacity=4*batch_size,
-                                  min_after_dequeue=2*batch_size,
+                                  capacity=20 * batch_size,
+                                  min_after_dequeue=5 * batch_size,
                                   num_threads=2)
 
 

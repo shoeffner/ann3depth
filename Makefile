@@ -41,7 +41,7 @@ BATCHSIZE ?= 32
 DATASET ?= nyu
 SUM_FREQ ?= 300
 CKPT_FREQ ?= 900
-CKPT_DIR := checkpoints
+CKPT_DIR ?= checkpoints
 TIMEOUT ?= 4200
 
 # Preprocessing parameters
