@@ -34,7 +34,7 @@ def main():
                          ('~', 'anaconda3', 'bin'),
                          ('conda', 'bin'))
         cpath = determine('cpath', 'Cuda include path',
-                          ('~', 'cuda', 'include'),
+                         ('~', 'cuda', 'include'),
                          ('cuda', 'include'))
         lpath = determine('library_path', 'Cuda lib path',
                          ('~', 'cuda', 'lib64'),

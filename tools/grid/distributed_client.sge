@@ -20,7 +20,7 @@ if [ "$JOB_TYPE" == "ps" ]; then
 else
     source activate ${CONDAENV-ann3depth}-GPU
 fi
-echo Active conda environment: $(conda info --envs | grep \*)
+echo Active conda environment: $(conda info --envs | grep '*')
 
 # Train
 CLUSTER_SPEC="$CLUSTER_SPEC.json" make train
