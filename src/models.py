@@ -296,58 +296,58 @@ class _MultiScaleDeepNetwork:
             loss_coarse = self.loss(coarse, depths, 'coarse_loss')
             loss_fine = self.loss(outputs, depths, 'fine_loss')
 
-        global_step = tf.train.get_or_create_global_step()
-        train_vars = tf.GraphKeys.TRAINABLE_VARIABLES
 
         with tf.name_scope('optimizers'):
-            coarse_conv_optimizer = tf.train.MomentumOptimizer(0.001, 0.9)
-            coarse_conv_variables = tf.get_collection(train_vars, 'coarse/conv')
-            coarse_conv_up_op = coarse_conv_optimizer.minimize(
-                loss_coarse,
-                global_step=global_step,
-                var_list=coarse_conv_variables)
+            samples_coarse = 2000000
+            samples_fine = 1500000
+            batch_size = int(images.shape[0])
 
-            coarse_dense_optimizer = tf.train.MomentumOptimizer(0.1, 0.9)
-            coarse_dense_variables = tf.get_collection(train_vars, 'coarse/dense')
-            coarse_dense_up_op = coarse_dense_optimizer.minimize(
-                loss_coarse,
-                global_step=None,
-                var_list=coarse_dense_variables)
+            steps_coarse = samples_coarse // batch_size
+            steps_fine = samples_fine // batch_size
 
-            fine_optimizer_small = tf.train.MomentumOptimizer(0.001, 0.9)
-            fine_small_variables = tf.get_collection(train_vars, 'fine/first')
-            fine_small_variables += tf.get_collection(train_vars, 'fine/third')
-            fine_small_up_op = fine_optimizer_small.minimize(
-                loss_fine,
-                global_step=global_step,
-                var_list=fine_small_variables)
+            global_step = tf.train.get_or_create_global_step()
+            train_vars = tf.GraphKeys.TRAINABLE_VARIABLES
 
-            fine_optimizer_big = tf.train.MomentumOptimizer(0.01, 0.9)
-            fine_big_variables = tf.get_collection(train_vars, 'fine/second')
-            fine_big_up_op = fine_optimizer_big.minimize(
-                loss_fine,
-                global_step=None,
-                var_list=fine_big_variables)
+            def create_optimizer(loss, rate, momentum, collections,
+                                 name='Momentum', global_step=None):
+                optimizer = tf.train.MomentumOptimizer(rate, momentum,
+                                                       name=name)
+                vars = []
+                for c in collections:
+                    vars += tf.get_collection(train_vars, c)
+                return optimizer.minimize(loss, global_step=global_step,
+                                          var_list=vars)
 
-        coarse_ops = [coarse_conv_up_op, coarse_dense_up_op]
-        fine_ops = [fine_small_up_op, fine_big_up_op]
+            def coarse_optimizers():
+                return [
+                    create_optimizer(loss_coarse, 0.001, 0.9,
+                                     ['coarse/conv'], 'CoarseConv',
+                                     global_step),
+                    create_optimizer(loss_coarse, 0.1, 0.9,
+                                     ['coarse/dense'], 'CoarseDense', None)
+                ]
 
-        samples_coarse = 2000000
-        samples_fine = 1500000
-        batch_size = int(images.shape[0])
+            def fine_optimizers():
+                return [
+                    create_optimizer(loss_fine, 0.001, 0.9,
+                                     ['fine/first', 'fine/third'], 'FineA',
+                                     global_step),
+                    create_optimizer(loss_fine, 0.01, 0.9,
+                                     ['fine/second'], 'FineB', None)
+                ]
 
-        steps_coarse = samples_coarse // batch_size
-        steps_fine = samples_fine // batch_size
+            cond_fine = global_step <= (steps_coarse + steps_fine)
+            cond_coarse = global_step <= steps_coarse
 
-        with tf.name_scope('choose_optimizer'):
-            cond_coarse = global_step < steps_coarse
-            cond_fine = global_step < steps_coarse + steps_fine
             fine_train = tf.cond(cond_fine,
-                                lambda: fine_ops,
-                                lambda: [tf.no_op(), tf.no_op()])
+                                 fine_optimizers,
+                                 # TODO: keep updating global step!
+                                 lambda: [tf.no_op(), tf.no_op()],
+                                 name='Fine')
             coarse_train = tf.cond(cond_coarse,
-                                lambda: coarse_ops,
-                                lambda: fine_train)
+                                   coarse_optimizers,
+                                   lambda: fine_train,
+                                   name='Coarse')
 
         with tf.name_scope('summaries'):
             tf.summary.image('Input', images, max_outputs=3)
