@@ -6,6 +6,8 @@
 /grid_logs/*
 /tools/grid/startup.sh
 
+.ignore_hosts
+
 __pycache__
 core
 *.pdf

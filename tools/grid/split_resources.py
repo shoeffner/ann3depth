@@ -59,6 +59,15 @@ def remove_invalid_queues(hosts_info):
     if allowed_queues:
         allowed_queues = set(allowed_queues.split(','))
         hosts_info = [h for h in hosts_info if set(h['queues']) & allowed_queues]
+
+    try:
+        with open('.ignore_hosts', 'r') as ihf:
+            ignore_hosts = ihf.read().splitlines()
+    except FileNotFoundError:
+        ignore_hosts = []
+    for s in ignore_hosts:
+        hosts_info = [h for h in hosts_info if s not in h['host']]
+
     return hosts_info
 
 
