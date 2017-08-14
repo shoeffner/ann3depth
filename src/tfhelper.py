@@ -189,6 +189,38 @@ class StopAtSignalHook(tf.train.SessionRunHook):
             run_context.request_stop()
 
 
+class TraceHook(tf.train.SessionRunHook):
+    """Hook to perform Traces every N steps."""
+
+    def __init__(self, ckptdir, every_step=50, trace_level=tf.RunOptions.FULL_TRACE):
+        self._trace = every_step == 1
+        self.writer = tf.summary.FileWriter(ckptdir)
+        self.trace_level = trace_level
+        self.every_step = every_step
+
+    def begin(self):
+        self._global_step_tensor = tf.train.get_global_step()
+        if self._global_step_tensor is None:
+            RuntimeError("Global step should be created to use _TraceHook.")
+
+    def before_run(self, run_context):
+        if self._trace:
+            options = tf.RunOptions(trace_level=self.trace_level)
+        else:
+            options = None
+        return tf.train.SessionRunArgs(fetches=self._global_step_tensor,
+                                       options=options)
+
+    def after_run(self, run_context, run_values):
+        global_step = run_values.results
+        if self._trace:
+            self._trace = False
+            self.writer.add_run_metadata(run_values.run_metadata,
+                                         f'step{global_step}')
+        if not (global_step + 1) % self.every_step:
+            self._trace = True
+
+
 class RoundRobinWorker:
     """If used as a tf.device device function, places each op on the next
     worker."""
