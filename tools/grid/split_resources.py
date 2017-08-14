@@ -29,7 +29,7 @@ def convert_memory(value):
 
 def parse_info_table(hostlist):
     result = []
-    qhost = subprocess.run(' '.join(['qhost', '-F', 'cuda_cores', '-q',
+    qhost = subprocess.run(' '.join(['qhost', '-F', 'cuda,cuda_cores', '-q',
                             '-h', ','.join(hostlist)]),
                            stdout=subprocess.PIPE, encoding='utf-8',
                            shell=True).stdout.splitlines()
@@ -40,12 +40,15 @@ def parse_info_table(hostlist):
                 'host': values[0],
                 'cpu': values[2],
                 'cuda': 0,
+                'cuda_cores': 0,
                 'memory': convert_memory(values[4]),
                 'memory-human': values[4],
                 'queues': []
             })
-        elif values[0] == 'Host':
+        elif len(values) == 3 and values[0] == 'Host':
             result[-1]['cuda'] = int(float(values[2].rsplit('=', 1)[-1]))
+        elif 'cuda_cores' in values[0]:
+            result[-1]['cuda_cores'] = int(float(values[0].rsplit('=', 1)[-1]))
         elif len(values) > 1 and values[1] == 'BIP':
             result[-1]['queues'].append(values[0])
     return result
@@ -69,6 +72,7 @@ def split_hosts(hosts, workers, ps):
     # Focus on parameter servers: select those first - but on tie, pick lower
     # cuda cores but higher cpu
     hc.sort(key=lambda h: h['cuda'])
+    hc.sort(key=lambda h: h['cuda_cores'])
     hc.sort(key=lambda h: h['cpu'], reverse=True)
     hc.sort(key=lambda h: h['memory'], reverse=True)
 
@@ -77,6 +81,7 @@ def split_hosts(hosts, workers, ps):
 
     # sort by cuda cores to select best GPU workers, but keep cpu/mem
     hc.sort(key=lambda h: h['cuda'], reverse=True)
+    hc.sort(key=lambda h: h['cuda_cores'], reverse=True)
 
     return hc[:workers], ps_list
 
