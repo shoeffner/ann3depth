@@ -56,6 +56,7 @@ def main():
                       'GPU': get_num_GPU()},
         allow_soft_placement=True,
         log_device_placement=__debug__,
+        gpu_options=tf.GPUOptions(allow_growth=True),
     )
 
     if args.job_name == 'ps':
