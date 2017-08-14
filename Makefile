@@ -134,7 +134,7 @@ conda: ./tools/grid/startup.sh
 .PHONY: doc
 doc: ${OUT_DIR}
 	pandoc \
-		-o ${OUT_DIR}/anndepth_assh_documentation.pdf \
+		-o ${OUT_DIR}/ann3depth_assh_documentation.pdf \
 		--bibliography=docs/references.bib \
 		docs/documentation.md \
 		docs/documentation.yaml
@@ -144,7 +144,7 @@ doc: ${OUT_DIR}
 .PHONY: smart
 smart: ${OUT_DIR}
 	pandoc -t beamer \
-		-o ${OUT_DIR}/anndepth_assh_smart.pdf \
+		-o ${OUT_DIR}/ann3depth_assh_smart.pdf \
 		docs/presentations/SMART-presentation.md \
 		docs/presentations/SMART-presentation.yaml
 
@@ -152,7 +152,7 @@ smart: ${OUT_DIR}
 .PHONY: status
 status: ${OUT_DIR}
 	pandoc -t beamer \
-		-o ${OUT_DIR}/anndepth_assh_status.pdf \
+		-o ${OUT_DIR}/ann3depth_assh_status.pdf \
 		docs/presentations/Status-presentation.md \
 		docs/presentations/Status-presentation.yaml
 

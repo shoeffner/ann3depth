@@ -1,12 +1,13 @@
 ---
-title: ANN for depth estimation on webcam streams
+title: Generating depth maps from single monocular images using distributed artificial neural networks
 author:
     - Andrea Suckro
     - Sebastian Höffner
-date: July 2017
+date: August 2017
 keywords:
     - ANN
     - depth map
-    - webcam
-nocite: "@*"
+    - distributed
+    - tensorflow
+    - sun grid engine
 ...
