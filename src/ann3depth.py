@@ -53,7 +53,7 @@ def main():
     logger.info('Setting up config.')
     config = tf.ConfigProto(
         device_count={'CPU': 1,
-                      'GPU': int(os.environ.get('CUDA_VISIBLE_DEVICES', 1))},
+                      'GPU': get_num_GPU()},
         allow_soft_placement=True,
         log_device_placement=__debug__,
     )
@@ -179,6 +179,28 @@ def create_ps_notifier(cluster_spec):
     if 'local' in cluster_spec or num_ps == 0:
         return tf.no_op()
     return [create_done_queue(i, num_workers).enqueue(1) for i in range(num_ps)]
+
+
+def get_num_GPU():
+    """Determines the number of visible GPUs by checking the
+    CUDA_VISIBLE_DEVICES environments variable.
+
+    See http://acceleware.com/blog/cudavisibledevices-masking-gpus for
+    information about how CUDA_VISIBLE_DEVICES works.
+
+    This function splits the value at , and checks whether the first is -1.
+    If that is the case, 0 GPUs are available.
+    If it is another value, then the number of elements is the number of
+    available GPUs (as those values represent the IDs).
+
+    Returns:
+        The number of available GPUs.
+    """
+    cuda_visible = os.environ.get('CUDA_VISIBLE_DEVICES', '-1').split(',')
+    if cuda_visible[0] == '-1':
+        return 0
+    else:
+        return len(cuda_visible)
 
 
 def parse_args():

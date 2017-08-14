@@ -66,11 +66,11 @@ for node in "${nodes[@]}"; do
         cores=$(qhost -h $node -F cuda_cores | tail -n1 | cut -d' ' -f12 | cut -d= -f2 | cut -d. -f1)
         param="$param -l cuda=1 -l cuda_cores=$cores"
         task_index=$task_worker
-        cuda=1
+        cuda=0
         (( task_worker++ ))
     else
         task_index=$task_ps
-        cuda=0
+        cuda=-1
         (( task_ps++ ))
     fi
 
