@@ -1,3 +1,4 @@
+import collections
 import math
 
 import tensorflow as tf
@@ -226,22 +227,29 @@ class _MultiScaleDeepNetwork:
 
     @tfhelper.variable_scope('coarse')
     def coarse(self, images):
-        with tf.name_scope('conv'):
-            temp = tf.layers.conv2d(images, 96, 11, (4, 4), activation=tf.nn.relu)
+        with tf.variable_scope('convlayers'):
+            temp = tf.layers.conv2d(images, 96, 11, (4, 4),
+                                    activation=tf.nn.relu, name='conv2d_0')
             temp = tf.layers.max_pooling2d(temp, 2, 2)
-            temp = tf.layers.conv2d(temp, 256, 5, padding='same', activation=tf.nn.relu)
+            temp = tf.layers.conv2d(temp, 256, 5, padding='same',
+                                    activation=tf.nn.relu, name='conv2d_1')
             temp = tf.layers.max_pooling2d(temp, 2, 2)
-            temp = tf.layers.conv2d(temp, 384, 3, padding='same', activation=tf.nn.relu)
-            temp = tf.layers.conv2d(temp, 384, 3, padding='same', activation=tf.nn.relu)
+            temp = tf.layers.conv2d(temp, 384, 3, padding='same',
+                                    activation=tf.nn.relu, name='conv2d_2')
+            temp = tf.layers.conv2d(temp, 384, 3, padding='same',
+                                    activation=tf.nn.relu, name='conv2d_3')
             # Note: Added striding to achieve same activation size
-            temp = tf.layers.conv2d(temp, 256, 3, (2, 2), activation=tf.nn.relu)
+            temp = tf.layers.conv2d(temp, 256, 3, (2, 2),
+                                    activation=tf.nn.relu, name='conv2d_4')
 
             temp = tf.reshape(temp, [int(temp.shape[0]), -1])
 
-        with tf.name_scope('dense'):
-            temp = tf.layers.dense(temp, 4096, activation=tf.nn.relu)
+        with tf.variable_scope('denselayers'):
+            temp = tf.layers.dense(temp, 4096, activation=tf.nn.relu,
+                                   name='dense_0')
             temp = tf.layers.dropout(temp, training=True)
-            temp = tf.layers.dense(temp, 55 * 74, activation=None)
+            temp = tf.layers.dense(temp, 55 * 74, activation=None,
+                                   name='dense_1')
 
             temp = tf.reshape(temp, [-1, 55, 74, 1])
 
@@ -249,14 +257,18 @@ class _MultiScaleDeepNetwork:
 
     @tfhelper.variable_scope('fine')
     def fine(self, images, coarse):
-        temp = tf.layers.conv2d(images, 63, 9, (2, 2), activation=tf.nn.relu, name='first')
-        temp = tf.layers.max_pooling2d(temp, 2, 2)
+        with tf.variable_scope('first'):
+            temp = tf.layers.conv2d(images, 63, 9, (2, 2),
+                                    activation=tf.nn.relu)
+            temp = tf.layers.max_pooling2d(temp, 2, 2)
 
-        temp = tf.concat([temp, coarse], axis=-1)
+        with tf.variable_scope('second'):
+            temp = tf.concat([temp, coarse], axis=-1)
+            temp = tf.layers.conv2d(temp, 64, 5, padding='same',
+                                    activation=tf.nn.relu)
 
-        temp = tf.layers.conv2d(temp, 64, 5, padding='same', activation=tf.nn.relu, name='second')
-
-        temp = tf.layers.conv2d(temp, 1, 5, padding='same', activation=None, name='third')
+        temp = tf.layers.conv2d(temp, 1, 5, padding='same', activation=None,
+                                name='third')
 
         return temp
 
@@ -275,14 +287,13 @@ class _MultiScaleDeepNetwork:
                                               loss_collection=[])
         scaleinv = tf.square(tf.reduce_sum(log_out - log_tar, 1))
 
-        loss = l2norm - lambd / (74 * 55)  * scaleinv
+        loss = l2norm - lambd / (74 * 55) * scaleinv
 
         # Mean loss for batch
         loss = tf.reduce_mean(loss, name=name)
 
         tf.losses.add_loss(loss)
         return loss
-
 
     def __call__(self, images, depths):
         with tf.name_scope('preprocessing'):
@@ -297,68 +308,68 @@ class _MultiScaleDeepNetwork:
             loss_fine = self.loss(outputs, depths, 'fine_loss')
 
 
+        # Create optimizers
+        samples_coarse = 2000000
+        samples_fine = 1500000
+        batch_size = int(images.shape[0])
+
+        steps_coarse = samples_coarse // batch_size
+        steps_fine = samples_fine // batch_size
+
+        global_step = tf.train.get_or_create_global_step()
+        train_vars = tf.GraphKeys.TRAINABLE_VARIABLES
+
+        def create_optimizer(loss, rate, momentum, collections,
+                             name='Momentum', global_step=None):
+            optimizer = tf.train.MomentumOptimizer(rate, momentum,
+                                                   name=name)
+            vars = []
+            for c in collections:
+                vars += tf.get_collection(train_vars, c)
+            return optimizer.minimize(loss, global_step=global_step,
+                                      var_list=vars)
+
+        def coarse_optimizers():
+            return tf.group(create_optimizer(loss_coarse, 0.001, 0.9,
+                                             ['coarse/convlayers'], 'CoarseConv',
+                                             global_step),
+                            create_optimizer(loss_coarse, 0.1, 0.9,
+                                             ['coarse/denselayers'],
+                                             'CoarseDense', None))
+
+        def fine_optimizers():
+            return tf.group(create_optimizer(loss_fine, 0.001, 0.9,
+                                             ['fine/first', 'fine/third'],
+                                             'FineA', global_step),
+                            create_optimizer(loss_fine, 0.01, 0.9,
+                                             ['fine/second'], 'FineB',
+                                             None))
+
         with tf.name_scope('optimizers'):
-            samples_coarse = 2000000
-            samples_fine = 1500000
-            batch_size = int(images.shape[0])
+            cond_fine = tf.logical_and(steps_coarse <= global_step,
+                                       global_step < (steps_coarse +
+                                                      steps_fine))
+            cond_coarse = global_step < steps_coarse
 
-            steps_coarse = samples_coarse // batch_size
-            steps_fine = samples_fine // batch_size
-
-            global_step = tf.train.get_or_create_global_step()
-            train_vars = tf.GraphKeys.TRAINABLE_VARIABLES
-
-            def create_optimizer(loss, rate, momentum, collections,
-                                 name='Momentum', global_step=None):
-                optimizer = tf.train.MomentumOptimizer(rate, momentum,
-                                                       name=name)
-                vars = []
-                for c in collections:
-                    vars += tf.get_collection(train_vars, c)
-                return optimizer.minimize(loss, global_step=global_step,
-                                          var_list=vars)
-
-            def coarse_optimizers():
-                return [
-                    create_optimizer(loss_coarse, 0.001, 0.9,
-                                     ['coarse/conv'], 'CoarseConv',
-                                     global_step),
-                    create_optimizer(loss_coarse, 0.1, 0.9,
-                                     ['coarse/dense'], 'CoarseDense', None)
-                ]
-
-            def fine_optimizers():
-                return [
-                    create_optimizer(loss_fine, 0.001, 0.9,
-                                     ['fine/first', 'fine/third'], 'FineA',
-                                     global_step),
-                    create_optimizer(loss_fine, 0.01, 0.9,
-                                     ['fine/second'], 'FineB', None)
-                ]
-
-            cond_fine = global_step <= (steps_coarse + steps_fine)
-            cond_coarse = global_step <= steps_coarse
-
-            fine_train = tf.cond(cond_fine,
-                                 fine_optimizers,
-                                 # TODO: keep updating global step!
-                                 lambda: [tf.no_op(), tf.no_op()],
-                                 name='Fine')
-            coarse_train = tf.cond(cond_coarse,
-                                   coarse_optimizers,
-                                   lambda: fine_train,
-                                   name='Coarse')
+            train = tf.case(
+                collections.OrderedDict([(cond_fine, fine_optimizers),
+                                         (cond_coarse, coarse_optimizers)]),
+                default=lambda: tf.group(tf.assign_add(global_step, 1)),
+                exclusive=True,
+                name='optimizers'
+            )
 
         with tf.name_scope('summaries'):
             tf.summary.image('Input', images, max_outputs=3)
             tf.summary.image('Coarse', coarse, max_outputs=3)
             tf.summary.image('Fine', outputs, max_outputs=3)
             tf.summary.image('Target', depths, max_outputs=3)
-            phase = tf.cond(cond_fine, lambda: 2, lambda: 3)
-            phase = tf.cond(cond_coarse, lambda: 1, lambda: phase)
+            phase = tf.case(collections.OrderedDict([(cond_fine, lambda: 2),
+                                                     (cond_coarse, lambda: 1)]),
+                            default=lambda: 3, exclusive=True, name='Phase')
             tf.summary.scalar('Phase', phase)
 
-        return coarse_train
+        return train
 
 
 dcnf = _DistributedConvolutionalNeuralFields()

@@ -212,12 +212,12 @@ class TraceHook(tf.train.SessionRunHook):
                                        options=options)
 
     def after_run(self, run_context, run_values):
-        global_step = run_values.results
+        global_step = run_values.results - 1
         if self._trace:
             self._trace = False
             self.writer.add_run_metadata(run_values.run_metadata,
                                          f'step{global_step}')
-        if not (global_step + 1) % self.every_step:
+        if not global_step % self.every_step:
             self._trace = True
 
 

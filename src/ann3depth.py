@@ -103,7 +103,7 @@ def main():
             tf.train.FinalOpsHook(create_ps_notifier(cluster_spec)),
             tfhelper.create_summary_hook(tf.GraphKeys.LOSSES, ckptdir,
                                          args.sumfreq),
-            tfhelper.TraceHook(ckptdir, 50),
+            tfhelper.TraceHook(ckptdir, 100),
         ]
 
         if args.job_name != 'local':
