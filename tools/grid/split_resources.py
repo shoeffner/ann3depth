@@ -89,7 +89,7 @@ def split_hosts(hosts, workers, ps):
     ps_list = [hc.pop(0) for i in range(ps)]
 
     # sort by cuda cores to select best GPU workers, but keep cpu/mem
-    hc.sort(key=lambda h: h['cuda'], reverse=True)
+    hc = [h for h in hc if h['cuda']]
     hc.sort(key=lambda h: h['cuda_cores'], reverse=True)
 
     return hc[:workers], ps_list
