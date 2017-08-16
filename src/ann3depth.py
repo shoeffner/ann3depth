@@ -67,6 +67,7 @@ def main():
                 session.run(queue.dequeue())
     elif args.job_name in ['worker', 'local']:
         chief = args.task_index == 0
+        train = args.mode == 'train'
 
         logger.info(f'Task: {args.task_index} -- Chief? {chief}')
 
@@ -89,11 +90,10 @@ def main():
 
         logger.info(f'Loading model {args.model}.')
         with tf.device(device_setter):
-            inputs, targets = data.inputs(args.datadir, args.dataset, args.batchsize)
-            model_train_op = getattr(models, args.model)(inputs, targets)
+            model_op = setup_model(args)
 
-            size_train = tfhelper.estimate_size_of(tf.GraphKeys.TRAINABLE_VARIABLES)
-            logger.debug(f'Trainable variables have about {size_train:.1f} MB')
+        size_train = tfhelper.estimate_size_of(tf.GraphKeys.TRAINABLE_VARIABLES)
+        logger.debug(f'Trainable variables have about {size_train:.1f} MB')
 
         logger.info('Setting up hooks.')
         summary_writer = tf.summary.FileWriter(ckptdir)
@@ -104,7 +104,7 @@ def main():
             tf.train.FinalOpsHook(create_ps_notifier(cluster_spec)),
             tfhelper.create_summary_hook(tf.GraphKeys.LOSSES, summary_writer,
                                          args.sumfreq),
-            tfhelper.TraceHook(summary_writer, 5000),
+            tfhelper.TraceHook(summary_writer, 5000, suffix=args.mode),
         ]
 
         if args.job_name != 'local':
@@ -115,22 +115,58 @@ def main():
         with tf.train.MonitoredTrainingSession(
                 master=server.target,
                 is_chief=chief,
-                checkpoint_dir=ckptdir if chief else None,
+                checkpoint_dir=ckptdir,
                 scaffold=None,
                 hooks=hooks,
                 chief_only_hooks=None,
-                save_checkpoint_secs=args.ckptfreq,
-                save_summaries_steps=None,
-                save_summaries_secs=args.sumfreq,
+                save_checkpoint_secs=args.ckptfreq if train else None,
+                save_summaries_steps=None if train else 1,
+                save_summaries_secs=args.sumfreq if train else None,
                 config=config,
                 stop_grace_period_secs=120,
-                log_step_count_steps=100) as session:
+                log_step_count_steps=50) as session:
             while not session.should_stop():
-                session.run(model_train_op)
+                session.run(model_op)
         logger.info('Session stopped.')
         sys.exit(stop_at_signal_hook.signal_received)
     else:
         logger.warning(f'No suitable job description found! {args.job_name}')
+
+
+def setup_model(args):
+    # Get model
+    model = getattr(models, args.model)
+
+    # Set up training
+    if args.mode == 'train':
+        inputs, targets = data.inputs(args.datadir, args.dataset,
+                                      args.batchsize, 'train')
+        return model(inputs, targets, True)
+
+    # Set up evaluation of losses
+    model = tf.make_template(args.model, model)
+    with tf.name_scope('train'):
+        inputs, targets = data.inputs(args.datadir, args.dataset,
+                                      args.batchsize, 'train', 1)
+        model(inputs, targets, False)
+
+    with tf.name_scope('test'):
+        inputs, targets = data.inputs(args.datadir, args.dataset,
+                                      args.batchsize, 'test')
+        model(inputs, targets, False)
+    losses = tf.get_collection(tf.GraphKeys.LOSSES)
+    if not losses:
+        raise RuntimeError('Add at least one loss to the tf.GraphKeys.LOSSES collection!')
+    update_ops = []
+    for loss in losses:
+        name = loss.name.split(':')[0] + '/mean'
+        mean, update_op = tf.contrib.metrics.streaming_mean(loss, name=name)
+        tf.summary.scalar(name, mean)
+        update_ops.append(update_op)
+
+    global_step = tf.train.get_or_create_global_step()
+    with tf.control_dependencies(update_ops):
+        return tf.assign_add(global_step, 1)
 
 
 def create_done_queue(ps_task, num_workers):
@@ -239,6 +275,9 @@ def parse_args():
                         help='"worker" or "ps" for distributed computations.')
     parser.add_argument('--task-index', default=0, type=int,
                         help='Task index for distributed computations.')
+    parser.add_argument('--mode', default='train', type=str,
+                        choices=['train', 'test'],
+                        help='Mode. Should be "train" or "test".')
     return parser.parse_args()
 
 

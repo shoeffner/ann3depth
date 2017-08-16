@@ -2,13 +2,14 @@
 #$ -l mem=150M
 #$ -cwd
 #$ -j y
-#$ -v GRID_QUEUES,GRID_PREFIX,MEMORY_RATIO,PS_NODES,WORKERS,CONDAENV,MODEL,STEPS,BATCHSIZE,DATASETS,CKPT_DIR,RUNID,CKPT_FREQ,SUM_FREQ,TIMEOUT
+#$ -v GRID_QUEUES,GRID_PREFIX,MEMORY_RATIO,PS_NODES,WORKERS,CONDAENV,MODEL,STEPS,BATCHSIZE,DATASETS,CKPT_DIR,RUNID,CKPT_FREQ,SUM_FREQ,TIMEOUT,MODE
 #$ -notify
 #$ -o grid_logs/keepalive.$JOB_ID.$HOSTNAME.out
 
 source ./tools/grid/startup.sh
 
-KEEP_ALIVE_INTERVAL=10
+KEEP_ALIVE_INTERVAL=10  # Seconds
+TEST_INTERVAL=5  # Minutes
 MEMORY_RATIO=${MEMORY_RATIO-0.3}
 PREFIX=${GRID_PREFIX-a3dx}
 REPORT_FILE=grid_logs/${PREFIX}_done
@@ -87,7 +88,7 @@ sleep 60
 if [ $(qstat | grep "${PREFIX}_[^k]" | wc -l) -ne $(($WORKERS + $PS_NODES)) ]; then
     echo Not all jobs worked properly. Cleaning up queue.
     clean_up
-    make distributed
+    make distributed_$MODE
     exit
 fi
 
@@ -101,10 +102,8 @@ while [ $alive -ne 0 ]; do
     sleep $KEEP_ALIVE_INTERVAL
     alive=$(qstat | grep "${PREFIX}_[^k]" | wc -l)
     if [ $alive -ne $num_jobs ]; then
-        echo Some jobs died! Cleaning up queue and restarting.
+        echo Some jobs died! Cleaning up queue.
         clean_up
-        make distributed
-        exit
     fi
 done
 echo All jobs vanished from queue.
@@ -115,7 +114,12 @@ if [ -f "$REPORT_FILE" ]; then
     echo Job done!
     echo Removing report file...
     rm $REPORT_FILE
-else
-    echo "Resubmitting job."
-    make distributed
+    exit 0
 fi
+
+if [ "$MODE" == "test" ]; then
+    echo Resubmitting test job in $TEST_INTERVAL minutes.
+    sleep $(( $TESTINTERVAL * 60 ))
+fi
+echo Resubmitting job
+make distributed_$MODE

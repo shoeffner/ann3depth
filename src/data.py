@@ -26,18 +26,24 @@ def _get_pipeline(dataset):
 
 
 @tfhelper.name_scope('input')
-def inputs(datadir, dataset, batch_size=32, train_or_test='train'):
+def inputs(datadir, dataset, batch_size=32, train_or_test='train', epochs=None):
+    epochs = epochs if train_or_test == 'train' else 1
+
     pipeline = _get_pipeline(dataset)
     base_dir = os.path.join(datadir, dataset)
 
     files = pipeline.files(base_dir, train_or_test)
-    queue_files = tf.train.string_input_producer(files)
+    queue_files = tf.train.string_input_producer(files,
+                                                 num_epochs=epochs,
+                                                 shuffle=bool(pipeline.labels))
 
     if not pipeline.labels:
         record = pipeline.reader(queue_files)
     else:
         labels = pipeline.labels(base_dir)
-        queue_labels = tf.train.string_input_producer(labels)
+        queue_labels = tf.train.string_input_producer(labels,
+                                                      num_epochs=epochs,
+                                                      shuffle=False)
 
         record = pipeline.reader(queue_files, queue_labels)
 

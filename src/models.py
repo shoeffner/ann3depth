@@ -176,7 +176,7 @@ class _DistributedConvolutionalNeuralFields:
 
         return loss
 
-    def __call__(self, images, depths):
+    def __call__(self, images, depths, train=True):
         images = tf.image.resize_images(images, [240, 320])
         depths = tf.image.resize_images(depths, [240, 320])
 
@@ -227,7 +227,7 @@ class _MultiScaleDeepNetwork:
         with tf.variable_scope('dense'):
             temp = tf.layers.dense(temp, 4096, activation=tf.nn.relu,
                                    name='dense_0')
-            temp = tf.layers.dropout(temp, training=True)
+            temp = tf.layers.dropout(temp, training=self.train)
             temp = tf.layers.dense(temp, 55 * 74, activation=None,
                                    name='dense_1')
 
@@ -274,7 +274,8 @@ class _MultiScaleDeepNetwork:
         tf.losses.add_loss(loss)
         return loss
 
-    def __call__(self, images, depths):
+    def __call__(self, images, depths, train=True):
+        self.train = train
         global_step = tf.train.get_or_create_global_step()
 
         with tf.name_scope('preprocessing'):
@@ -306,8 +307,12 @@ class _MultiScaleDeepNetwork:
         def create_optimizer(loss, rate, momentum, collections,
                              name='Adam'):
             optimizer = tf.train.AdamOptimizer(rate, momentum, 1, name=name)
+
+            scope = tf.get_variable_scope().name
             vars = []
             for c in collections:
+                if scope:
+                    c = f'{scope}/{c}'
                 vars += tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, c)
             grad_vars = optimizer.compute_gradients(loss, var_list=vars)
             grad, vars = list(zip(*grad_vars))
