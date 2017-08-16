@@ -240,11 +240,10 @@ class TraceHook(tf.train.SessionRunHook):
             run_context: The original run context.
             run_values: The resulting run values.
         """
-        global_step = run_values.results
+        global_step = run_values.results - 1
         if self._trace:
             self._trace = False
-            traced_step = global_step - 1
             self.writer.add_run_metadata(run_values.run_metadata,
-                                         f'{traced_step}', traced_step)
+                                         f'{global_step}', global_step)
         if not global_step % self.every_step:
             self._trace = True
