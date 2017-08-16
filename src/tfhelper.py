@@ -192,18 +192,39 @@ class StopAtSignalHook(tf.train.SessionRunHook):
 class TraceHook(tf.train.SessionRunHook):
     """Hook to perform Traces every N steps."""
 
-    def __init__(self, ckptdir, every_step=50, trace_level=tf.RunOptions.FULL_TRACE):
-        self._trace = every_step == 1
+    def __init__(self, ckptdir, every_step=50,
+                 trace_level=tf.RunOptions.FULL_TRACE):
+        """Initializes the TraceHook.
+
+        Traces the 0th and every N-th step.
+
+        Args:
+            ckptdir: The checkpoint directory for the FileWriter to write.
+            every_step: Each N-th step a trace will be performed.
+            trace_level: The trace level to be passed to tf.RunOptions.
+        """
+        self._trace = True
         self.writer = tf.summary.FileWriter(ckptdir)
         self.trace_level = trace_level
         self.every_step = every_step
 
     def begin(self):
+        """Check is the global step is available inside the graph."""
         self._global_step_tensor = tf.train.get_global_step()
         if self._global_step_tensor is None:
             RuntimeError("Global step should be created to use _TraceHook.")
 
     def before_run(self, run_context):
+        """If a trace is requested, adds tf.RunOptions to the session args.
+
+        Always requests the global step.
+
+        Args:
+            run_context: The run context.
+
+        Returns:
+            SessionRunArgs as described above.
+        """
         if self._trace:
             options = tf.RunOptions(trace_level=self.trace_level)
         else:
@@ -212,11 +233,18 @@ class TraceHook(tf.train.SessionRunHook):
                                        options=options)
 
     def after_run(self, run_context, run_values):
-        global_step = run_values.results - 1
+        """If a trace was requested for this run, store the results.
+        Otherwise check if the next step should request a trace.
+
+        Args:
+            run_context: The original run context.
+            run_values: The resulting run values.
+        """
+        global_step = run_values.results
         if self._trace:
             self._trace = False
             self.writer.add_run_metadata(run_values.run_metadata,
-                                         f'step{global_step}')
+                                         f'step{global_step - 1}')
         if not global_step % self.every_step:
             self._trace = True
 
