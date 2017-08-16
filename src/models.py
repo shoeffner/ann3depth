@@ -227,7 +227,7 @@ class _MultiScaleDeepNetwork:
 
     @tfhelper.variable_scope('coarse')
     def coarse(self, images):
-        with tf.variable_scope('convlayers'):
+        with tf.variable_scope('conv'):
             temp = tf.layers.conv2d(images, 96, 11, (4, 4),
                                     activation=tf.nn.relu, name='conv2d_0')
             temp = tf.layers.max_pooling2d(temp, 2, 2)
@@ -244,7 +244,7 @@ class _MultiScaleDeepNetwork:
 
             temp = tf.reshape(temp, [int(temp.shape[0]), -1])
 
-        with tf.variable_scope('denselayers'):
+        with tf.variable_scope('dense'):
             temp = tf.layers.dense(temp, 4096, activation=tf.nn.relu,
                                    name='dense_0')
             temp = tf.layers.dropout(temp, training=True)
@@ -307,7 +307,6 @@ class _MultiScaleDeepNetwork:
             loss_coarse = self.loss(coarse, depths, 'coarse_loss')
             loss_fine = self.loss(outputs, depths, 'fine_loss')
 
-
         # Create optimizers
         samples_coarse = 2000000
         samples_fine = 1500000
@@ -331,10 +330,10 @@ class _MultiScaleDeepNetwork:
 
         def coarse_optimizers():
             return tf.group(create_optimizer(loss_coarse, 0.001, 0.9,
-                                             ['coarse/convlayers'], 'CoarseConv',
+                                             ['coarse/conv'], 'CoarseConv',
                                              global_step),
                             create_optimizer(loss_coarse, 0.1, 0.9,
-                                             ['coarse/denselayers'],
+                                             ['coarse/dense'],
                                              'CoarseDense', None))
 
         def fine_optimizers():
