@@ -134,13 +134,13 @@ def estimate_size_of(graphkey):
                 for v in tf.get_collection(graphkey)]) * 4 / 1024 / 1024
 
 
-def create_summary_hook(graphkey, ckptdir, secs=150):
+def create_summary_hook(graphkey, summary_writer, secs=150):
     """Adds a summary hook with scalar summaries of tensor values for
     tensors inside the collection of graphkey.
 
     Args:
         graphkey: The key which tensors should be summarized.
-        ckptdir: The checkpoint directory.
+        summary_writer: The FileWriter to use.
         steps: The summary will be stored every N steps.
 
     Returns:
@@ -153,7 +153,7 @@ def create_summary_hook(graphkey, ckptdir, secs=150):
         summaries.append(tf.summary.scalar(name, tensor, []))
     summary_op = tf.summary.merge(summaries)
     return tf.train.SummarySaverHook(save_secs=secs,
-                                     output_dir=ckptdir,
+                                     summary_writer=summary_writer,
                                      summary_op=summary_op)
 
 
@@ -192,24 +192,24 @@ class StopAtSignalHook(tf.train.SessionRunHook):
 class TraceHook(tf.train.SessionRunHook):
     """Hook to perform Traces every N steps."""
 
-    def __init__(self, ckptdir, every_step=50,
+    def __init__(self, summary_writer, every_step=50,
                  trace_level=tf.RunOptions.FULL_TRACE):
         """Initializes the TraceHook.
 
         Traces the 0th and every N-th step.
 
         Args:
-            ckptdir: The checkpoint directory for the FileWriter to write.
+            summary_writer: The FileWriter to use.
             every_step: Each N-th step a trace will be performed.
             trace_level: The trace level to be passed to tf.RunOptions.
         """
         self._trace = True
-        self.writer = tf.summary.FileWriter(ckptdir)
+        self.writer = summary_writer
         self.trace_level = trace_level
         self.every_step = every_step
 
     def begin(self):
-        """Check is the global step is available inside the graph."""
+        """Check if the global step is available inside the graph."""
         self._global_step_tensor = tf.train.get_global_step()
         if self._global_step_tensor is None:
             RuntimeError("Global step should be created to use _TraceHook.")
@@ -243,18 +243,8 @@ class TraceHook(tf.train.SessionRunHook):
         global_step = run_values.results
         if self._trace:
             self._trace = False
+            traced_step = global_step - 1
             self.writer.add_run_metadata(run_values.run_metadata,
-                                         f'step{global_step - 1}')
+                                         f'{traced_step}', traced_step)
         if not global_step % self.every_step:
             self._trace = True
-
-
-class RoundRobinWorker:
-    """If used as a tf.device device function, places each op on the next
-    worker."""
-
-    def __init__(self, num_workers=1):
-        self.iter = itertools.cycle(range(num_workers))
-
-    def __call__(self, n):
-        return f'/job:worker/task:{next(self.iter)}/cpu:0'

@@ -96,14 +96,15 @@ def main():
             logger.debug(f'Trainable variables have about {size_train:.1f} MB')
 
         logger.info('Setting up hooks.')
+        summary_writer = tf.summary.FileWriter(ckptdir)
         stop_at_signal_hook = tfhelper.StopAtSignalHook()
         hooks = [
             tf.train.StopAtStepHook(last_step=args.steps),
             stop_at_signal_hook,
             tf.train.FinalOpsHook(create_ps_notifier(cluster_spec)),
-            tfhelper.create_summary_hook(tf.GraphKeys.LOSSES, ckptdir,
+            tfhelper.create_summary_hook(tf.GraphKeys.LOSSES, summary_writer,
                                          args.sumfreq),
-            tfhelper.TraceHook(ckptdir, 5000),
+            tfhelper.TraceHook(summary_writer, 5000),
         ]
 
         if args.job_name != 'local':
