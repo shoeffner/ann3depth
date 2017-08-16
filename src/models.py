@@ -263,8 +263,7 @@ class _MultiScaleDeepNetwork:
         log_tar = tf.log(targets + eps)
         log_tar = tf.where(tf.is_nan(log_tar), tf.zeros_like(log_tar), log_tar)
 
-        l2norm = tf.losses.mean_squared_error(log_out, log_tar,
-                                              loss_collection=[])
+        l2norm = tf.reduce_sum(tf.square(log_out - log_tar), 1)
         scaleinv = tf.square(tf.reduce_sum(log_out - log_tar, 1))
 
         loss = l2norm - lambd / (74 * 55) * scaleinv
@@ -276,6 +275,8 @@ class _MultiScaleDeepNetwork:
         return loss
 
     def __call__(self, images, depths):
+        global_step = tf.train.get_or_create_global_step()
+
         with tf.name_scope('preprocessing'):
             images = tf.image.resize_images(images, [228, 304])
             depths = tf.image.resize_images(depths, [55, 74])
@@ -287,42 +288,59 @@ class _MultiScaleDeepNetwork:
             loss_coarse = self.loss(coarse, depths, 'coarse_loss')
             loss_fine = self.loss(outputs, depths, 'fine_loss')
 
-        # Create optimizers
+        with tf.name_scope('summaries'):
+            tf.summary.image('Input', images, max_outputs=3)
+            tf.summary.image('Coarse', coarse, max_outputs=3)
+            tf.summary.image('Fine', outputs, max_outputs=3)
+            tf.summary.image('Target', depths, max_outputs=3)
+
+        return self.optimizers(loss_coarse, loss_fine,
+                               global_step, int(images.shape[0]))
+
+    def optimizers(self, loss_coarse, loss_fine, global_step, batchsize):
         samples_coarse = 2000000
         samples_fine = 1500000
-        batch_size = int(images.shape[0])
-
-        steps_coarse = samples_coarse // batch_size
-        steps_fine = samples_fine // batch_size
-
-        global_step = tf.train.get_or_create_global_step()
-        train_vars = tf.GraphKeys.TRAINABLE_VARIABLES
+        steps_coarse = samples_coarse // batchsize
+        steps_fine = samples_fine // batchsize
 
         def create_optimizer(loss, rate, momentum, collections,
-                             name='Momentum', global_step=None):
-            optimizer = tf.train.MomentumOptimizer(rate, momentum,
-                                                   name=name)
+                             name='Adam'):
+            optimizer = tf.train.AdamOptimizer(rate, momentum, 1, name=name)
             vars = []
             for c in collections:
-                vars += tf.get_collection(train_vars, c)
-            return optimizer.minimize(loss, global_step=global_step,
-                                      var_list=vars)
+                vars += tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, c)
+            grad_vars = optimizer.compute_gradients(loss, var_list=vars)
+            grad, vars = list(zip(*grad_vars))
+            return optimizer, grad_vars
 
         def coarse_optimizers():
-            return tf.group(create_optimizer(loss_coarse, 0.001, 0.9,
-                                             ['coarse/conv'], 'CoarseConv',
-                                             global_step),
-                            create_optimizer(loss_coarse, 0.1, 0.9,
-                                             ['coarse/dense'],
-                                             'CoarseDense', None))
+            opt1, grad_vars1 = create_optimizer(loss_coarse, 0.001, 0.9,
+                                                ['coarse/conv'],
+                                                'CoarseConv')
+            opt2, grad_vars2 = create_optimizer(loss_coarse, 0.1, 0.9,
+                                                ['coarse/dense'],
+                                                'CoarseDense')
+
+            control_deps = next(zip(*grad_vars1, *grad_vars2))
+            with tf.control_dependencies(control_deps):
+                return tf.group(
+                    opt1.apply_gradients(grad_vars1, global_step),
+                    opt2.apply_gradients(grad_vars2)
+                )
 
         def fine_optimizers():
-            return tf.group(create_optimizer(loss_fine, 0.001, 0.9,
-                                             ['fine/first', 'fine/third'],
-                                             'FineA', global_step),
-                            create_optimizer(loss_fine, 0.01, 0.9,
-                                             ['fine/second'], 'FineB',
-                                             None))
+            opt1, grad_vars1 = create_optimizer(loss_fine, 0.001, 0.9,
+                                                ['fine/first', 'fine/third'],
+                                                'FineA')
+            opt2, grad_vars2 = create_optimizer(loss_fine, 0.01, 0.9,
+                                                ['fine/second'], 'FineB')
+
+            control_deps = next(zip(*grad_vars1, *grad_vars2))
+            with tf.control_dependencies(control_deps):
+                return tf.group(
+                    opt1.apply_gradients(grad_vars1, global_step),
+                    opt2.apply_gradients(grad_vars2)
+                )
 
         with tf.name_scope('optimizers'):
             cond_fine = tf.logical_and(steps_coarse <= global_step,
@@ -338,14 +356,10 @@ class _MultiScaleDeepNetwork:
                 name='optimizers'
             )
 
-        with tf.name_scope('summaries'):
-            tf.summary.image('Input', images, max_outputs=3)
-            tf.summary.image('Coarse', coarse, max_outputs=3)
-            tf.summary.image('Fine', outputs, max_outputs=3)
-            tf.summary.image('Target', depths, max_outputs=3)
             phase = tf.case(collections.OrderedDict([(cond_fine, lambda: 2),
                                                      (cond_coarse, lambda: 1)]),
-                            default=lambda: 3, exclusive=True, name='Phase')
+                            default=lambda: 3, exclusive=True,
+                            name='DeterminePhase')
             tf.summary.scalar('Phase', phase)
 
         return train
