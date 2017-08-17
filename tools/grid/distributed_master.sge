@@ -2,7 +2,7 @@
 #$ -l mem=150M
 #$ -cwd
 #$ -j y
-#$ -v GRID_QUEUES,GRID_PREFIX,MEMORY_RATIO,PS_NODES,WORKERS,CONDAENV,MODEL,STEPS,BATCHSIZE,DATASETS,CKPT_DIR,RUNID,CKPT_FREQ,SUM_FREQ,TIMEOUT,MODE
+#$ -v GRID_QUEUES,GRID_PREFIX,MEMORY_RATIO,PS_NODES,WORKERS,CONDAENV,MODEL,STEPS,BATCHSIZE,DATASETS,CKPT_DIR,RUNID,CKPT_FREQ,SUM_FREQ,TIMEOUT
 #$ -notify
 #$ -o grid_logs/keepalive.$JOB_ID.$HOSTNAME.out
 
@@ -88,12 +88,11 @@ sleep 60
 if [ $(qstat | grep "${PREFIX}_[^k]" | wc -l) -ne $(($WORKERS + $PS_NODES)) ]; then
     echo Not all jobs worked properly. Cleaning up queue.
     clean_up
-    make distributed_$MODE
+    make distributed
     exit
 fi
 
 echo All jobs seem to be fine, idling now.
-
 
 
 num_jobs=$(qstat | grep "${PREFIX}_[^k]" | wc -l)
@@ -117,9 +116,5 @@ if [ -f "$REPORT_FILE" ]; then
     exit 0
 fi
 
-if [ "$MODE" == "test" ]; then
-    echo Resubmitting test job in $TEST_INTERVAL minutes.
-    sleep $(( $TESTINTERVAL * 60 ))
-fi
 echo Resubmitting job
-make distributed_$MODE
+make distributed

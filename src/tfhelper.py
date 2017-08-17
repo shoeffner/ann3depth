@@ -193,7 +193,7 @@ class TraceHook(tf.train.SessionRunHook):
     """Hook to perform Traces every N steps."""
 
     def __init__(self, summary_writer, every_step=50,
-                 trace_level=tf.RunOptions.FULL_TRACE, suffix=''):
+                 trace_level=tf.RunOptions.FULL_TRACE):
         """Initializes the TraceHook.
 
         Traces the 0th and every N-th step.
@@ -207,7 +207,6 @@ class TraceHook(tf.train.SessionRunHook):
         self.writer = summary_writer
         self.trace_level = trace_level
         self.every_step = every_step
-        self.suffix = f'_{suffix}' if suffix else ''
 
     def begin(self):
         """Check if the global step is available inside the graph."""
@@ -244,8 +243,7 @@ class TraceHook(tf.train.SessionRunHook):
         global_step = run_values.results - 1
         if self._trace:
             self._trace = False
-            id = f'{global_step}{self.suffix}'
-            self.writer.add_run_metadata(run_values.run_metadata, id,
-                                         global_step)
+            self.writer.add_run_metadata(run_values.run_metadata,
+                                         f'{global_step}', global_step)
         if not (global_step + 1) % self.every_step:
             self._trace = True

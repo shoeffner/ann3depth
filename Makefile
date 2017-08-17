@@ -43,7 +43,6 @@ SUM_FREQ ?= 300
 CKPT_FREQ ?= 900
 CKPT_DIR ?= checkpoints
 TIMEOUT ?= 4200
-MODE ?= train
 
 # Preprocessing parameters
 WIDTH ?= 640
@@ -83,23 +82,16 @@ endif
 
 .PHONY: train
 train: ${DATA_DIR}
-	${SCRIPT} ${SCRIPT_PARAMETERS} --mode=${MODE} ${DATASET}
-
-.PHONY: test
-test: ${DATA_DIR}
-	${SCRIPT} ${SCRIPT_PARAMETERS} --mode=test ${DATASET}
-
+	${SCRIPT} ${SCRIPT_PARAMETERS} ${DATASET}
 
 .DEFAULT: distributed
 .PHONY: distributed
-distributed: distributed_train distributed_test
-
-distributed_%: ${LOG_DIR} ./tools/grid/startup.sh
+distributed: ${LOG_DIR} ./tools/grid/startup.sh
 	MEMORY_RATIO=${MEMORY_RATIO} GRID_QUEUES=${GRID_QUEUES} GRID_PREFIX=${GRID_PREFIX} RUNID=${RUNID} \
 		PS_NODES=${PS_NODES} WORKERS=${WORKERS} CONDAENV=${CONDAENV} MODEL=${MODEL} STEPS=${STEPS} \
 		BATCHSIZE=${BATCHSIZE} DATASET=${DATASET} CKPT_DIR=${CKPT_DIR} CKPT_FREQ=${CKPT_FREQ} \
-		SUM_FREQ=${SUM_FREQ} DATA_DIR=${DATA_DIR} TIMEOUT=${TIMEOUT} MODE=$* GRID_PREFIX=${GRID_PREFIX}$(if $(filter-out test,$*),,t) \
-		qsub ${GRID_QUEUE_ARG} -N ${GRID_PREFIX}$(if $(filter-out test,$*),,t)_keepalive ./tools/grid/distributed_master.sge
+		SUM_FREQ=${SUM_FREQ} DATA_DIR=${DATA_DIR} TIMEOUT=${TIMEOUT} \
+		qsub ${GRID_QUEUE_ARG} -N ${GRID_PREFIX}_keepalive ./tools/grid/distributed_master.sge
 
 
 ####### HELPER ##########
