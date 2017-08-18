@@ -95,15 +95,14 @@ def main():
         logger.debug(f'Trainable variables have about {size_train:.1f} MB')
 
         logger.info('Setting up hooks.')
-        summary_writer = tf.summary.FileWriter(ckptdir)
         stop_at_signal_hook = tfhelper.StopAtSignalHook()
         hooks = [
             tf.train.StopAtStepHook(last_step=args.steps),
             stop_at_signal_hook,
             tf.train.FinalOpsHook(create_ps_notifier(cluster_spec)),
-            tfhelper.create_summary_hook(tf.GraphKeys.LOSSES, summary_writer,
+            tfhelper.create_summary_hook(tf.GraphKeys.LOSSES, ckptdir,
                                          args.sumfreq),
-            tfhelper.TraceHook(summary_writer, 5000),
+            tfhelper.TraceHook(ckptdir, 5000),
         ]
 
         if args.job_name != 'local':
@@ -114,16 +113,16 @@ def main():
         with tf.train.MonitoredTrainingSession(
                 master=server.target,
                 is_chief=chief,
-                checkpoint_dir=ckptdir,
+                checkpoint_dir=ckptdir if chief else None,
                 scaffold=None,
                 hooks=hooks,
                 chief_only_hooks=None,
                 save_checkpoint_secs=args.ckptfreq,
-                save_summaries_steps=None,
-                save_summaries_secs=args.sumfreq,
+                save_summaries_steps=args.sumfreq,
+                save_summaries_secs=None,
                 config=config,
                 stop_grace_period_secs=120,
-                log_step_count_steps=50) as session:
+                log_step_count_steps=args.sumfreq) as session:
             while not session.should_stop():
                 session.run(model_op)
         logger.info('Session stopped.')
@@ -142,9 +141,8 @@ def setup_model(args):
         The model train operation.
     """
     model = getattr(models, args.model)
-    inputs, targets = data.inputs(args.datadir, args.dataset,
-                                  args.batchsize, 'train')
-    return model(inputs, targets, True)
+    inputs, targets = data.inputs(args.datadir, args.dataset, args.batchsize)
+    return model(inputs, targets)
 
 
 def create_done_queue(ps_task, num_workers):
@@ -241,8 +239,8 @@ def parse_args():
                         help='Checkpoint path suffix.')
     parser.add_argument('--ckptfreq', '-f', default=900, type=int,
                         help='Create a checkpoint every N seconds.')
-    parser.add_argument('--sumfreq', '-r', default=150, type=int,
-                        help='Create a summary every N seconds.')
+    parser.add_argument('--sumfreq', '-r', default=100, type=int,
+                        help='Create a summary every N steps.')
     parser.add_argument('--datadir', '-d', default='data', type=str,
                         help='The data directory containing the datasets.')
     parser.add_argument('--timeout', '-k', default=4200, type=int,

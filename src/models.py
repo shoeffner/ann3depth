@@ -308,11 +308,8 @@ class _MultiScaleDeepNetwork:
                              name='Adam'):
             optimizer = tf.train.AdamOptimizer(rate, momentum, 1, name=name)
 
-            scope = tf.get_variable_scope().name
             vars = []
             for c in collections:
-                if scope:
-                    c = f'{scope}/{c}'
                 vars += tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, c)
             grad_vars = optimizer.compute_gradients(loss, var_list=vars)
             grad, vars = list(zip(*grad_vars))

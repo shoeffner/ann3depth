@@ -134,13 +134,13 @@ def estimate_size_of(graphkey):
                 for v in tf.get_collection(graphkey)]) * 4 / 1024 / 1024
 
 
-def create_summary_hook(graphkey, summary_writer, secs=150):
+def create_summary_hook(graphkey, ckptdir, steps=150):
     """Adds a summary hook with scalar summaries of tensor values for
     tensors inside the collection of graphkey.
 
     Args:
         graphkey: The key which tensors should be summarized.
-        summary_writer: The FileWriter to use.
+        ckptdir: The checkpoint directory.
         steps: The summary will be stored every N steps.
 
     Returns:
@@ -152,8 +152,8 @@ def create_summary_hook(graphkey, summary_writer, secs=150):
         name = '/'.join(tensor.name.split('/')[0:2]).split(':')[0]
         summaries.append(tf.summary.scalar(name, tensor, []))
     summary_op = tf.summary.merge(summaries)
-    return tf.train.SummarySaverHook(save_secs=secs,
-                                     summary_writer=summary_writer,
+    return tf.train.SummarySaverHook(save_steps=steps,
+                                     output_dir=ckptdir,
                                      summary_op=summary_op)
 
 
@@ -192,19 +192,19 @@ class StopAtSignalHook(tf.train.SessionRunHook):
 class TraceHook(tf.train.SessionRunHook):
     """Hook to perform Traces every N steps."""
 
-    def __init__(self, summary_writer, every_step=50,
+    def __init__(self, ckptdir, every_step=50,
                  trace_level=tf.RunOptions.FULL_TRACE):
         """Initializes the TraceHook.
 
-        Traces the 0th and every N-th step.
+        Traces the 1st (after every restart) and every N-th (total) step.
 
         Args:
-            summary_writer: The FileWriter to use.
+            ckptdir: The checkpoint directory.
             every_step: Each N-th step a trace will be performed.
             trace_level: The trace level to be passed to tf.RunOptions.
         """
         self._trace = True
-        self.writer = summary_writer
+        self.writer = tf.summary.FileWriter(ckptdir)
         self.trace_level = trace_level
         self.every_step = every_step
 
@@ -240,7 +240,7 @@ class TraceHook(tf.train.SessionRunHook):
             run_context: The original run context.
             run_values: The resulting run values.
         """
-        global_step = run_values.results - 1
+        global_step = run_values.results
         if self._trace:
             self._trace = False
             self.writer.add_run_metadata(run_values.run_metadata,

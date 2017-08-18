@@ -13,7 +13,7 @@ TEST_INTERVAL=5  # Minutes
 MEMORY_RATIO=${MEMORY_RATIO-0.3}
 PREFIX=${GRID_PREFIX-a3dx}
 REPORT_FILE=grid_logs/${PREFIX}_done
-if [ $(wc -c <<< $GRID_QUEUES) -qt 2 ]; then
+if [ $(wc -c <<< $GRID_QUEUES) -gt 2 ]; then
     QUEUE=-q $GRID_QUEUES
 else
     QUEUE=
