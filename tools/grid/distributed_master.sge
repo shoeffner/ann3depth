@@ -6,6 +6,9 @@
 #$ -notify
 #$ -o grid_logs/keepalive.$JOB_ID.$HOSTNAME.out
 
+echo Removing log files older than approx 2 hours
+find grid_logs -type f -mtime 0.08 --execdir rm -- {} \;
+
 source ./tools/grid/startup.sh
 
 KEEP_ALIVE_INTERVAL=10  # Seconds
@@ -14,7 +17,7 @@ MEMORY_RATIO=${MEMORY_RATIO-0.3}
 PREFIX=${GRID_PREFIX-a3dx}
 REPORT_FILE=grid_logs/${PREFIX}_done
 if [ $(wc -c <<< $GRID_QUEUES) -gt 2 ]; then
-    QUEUE=-q $GRID_QUEUES
+    QUEUE="-q $GRID_QUEUES"
 else
     QUEUE=
 fi
@@ -85,7 +88,7 @@ done
 echo All jobs submitted, checking back in 1 minute to query their status.
 
 sleep 60
-if [ $(qstat | grep "${PREFIX}_[^k]" | wc -l) -ne $(($WORKERS + $PS_NODES)) ]; then
+if [ $(qstat -u $(whoami) | grep "${PREFIX}_[^k]" | grep -v " qw " | wc -l) -ne $(($WORKERS + $PS_NODES)) ]; then
     echo Not all jobs worked properly. Cleaning up queue.
     clean_up
     make distributed
@@ -95,11 +98,11 @@ fi
 echo All jobs seem to be fine, idling now.
 
 
-num_jobs=$(qstat | grep "${PREFIX}_[^k]" | wc -l)
+num_jobs=$(qstat -u $(whoami) | grep "${PREFIX}_[^k]" | wc -l)
 alive=$num_jobs
 while [ $alive -ne 0 ]; do
     sleep $KEEP_ALIVE_INTERVAL
-    alive=$(qstat | grep "${PREFIX}_[^k]" | wc -l)
+    alive=$(qstat -u $(whoami) | grep "${PREFIX}_[^k]" | wc -l)
     if [ $alive -ne $num_jobs ]; then
         echo Some jobs died! Cleaning up queue.
         clean_up
