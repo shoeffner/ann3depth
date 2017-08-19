@@ -6,14 +6,20 @@
 #$ -notify
 #$ -o grid_logs/keepalive.$JOB_ID.$HOSTNAME.out
 
+echo =============
+echo ------------- $(hostname) -------------
+echo $JOB_ID -- keepalive
+echo =============
+
+
 echo Removing log files older than approx 2 hours
-find grid_logs -type f -mtime 0.08 --execdir rm -- {} \;
+find grid_logs -type f -mtime 0.08 -execdir rm -- {} \;
 
 source ./tools/grid/startup.sh
 
 KEEP_ALIVE_INTERVAL=10  # Seconds
 TEST_INTERVAL=5  # Minutes
-MEMORY_RATIO=${MEMORY_RATIO-0.3}
+MEMORY_RATIO=${MEMORY_RATIO-0.9}
 PREFIX=${GRID_PREFIX-a3dx}
 REPORT_FILE=grid_logs/${PREFIX}_done
 if [ $(wc -c <<< $GRID_QUEUES) -gt 2 ]; then
@@ -28,7 +34,8 @@ function clean_up {
 
 
 source activate ${CONDAENV-ann3depth}-CPU
-echo Active conda environment: $(conda info --envs | grep \*)
+echo Active conda environment:
+conda info --envs | grep '[*]'
 
 
 # Determine available hosts.

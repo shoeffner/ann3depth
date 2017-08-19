@@ -13,6 +13,7 @@ SELF=$(hostname)
 
 echo =============
 echo ------------- $SELF -------------
+echo $JOB_ID -- $JOB_TYPE - $TASK_INDEX
 echo =============
 
 if [ "$JOB_TYPE" == "ps" ]; then

@@ -62,7 +62,7 @@ def remove_invalid_queues(hosts_info):
 
     try:
         with open('.ignore_hosts', 'r') as ihf:
-            ignore_hosts = ihf.read().splitlines()
+            ignore_hosts = [h for h in ihf.read().splitlines() if h]
     except FileNotFoundError:
         ignore_hosts = []
     for s in ignore_hosts:
@@ -74,8 +74,8 @@ def remove_invalid_queues(hosts_info):
 def split_hosts(hosts, workers, ps):
     hc = hosts.copy()
     if len(hc) < workers + ps:
-        print(f'Not enough hosts available (got {len(hc)},',
-              f'expected {workers + ps}')
+        print(f'[split_res] Not enough hosts available (got {len(hc)},',
+              f'expected {workers + ps})', file=sys.stderr)
         exit(1)
 
     # Focus on parameter servers: select those first - but on tie, pick lower
@@ -125,14 +125,22 @@ def dump_cluster_spec(cluster_spec):
 
 def main():
     args = parse_args()
+    print('[split_res] Retreiving host info.', file=sys.stderr)
     hosts_info = parse_info_table(args.hosts)
+    print(f'[split_res] Got {len(hosts_info)} hosts.', file=sys.stderr)
 
+    print('[split_res] Filtering queues and hosts.', file=sys.stderr)
     hosts_info = remove_invalid_queues(hosts_info)
+    print(f'[split_res] Kept {len(hosts_info)} hosts.', file=sys.stderr)
 
+    print('[split_res] Splitting resources.', file=sys.stderr)
     workers, ps = split_hosts(hosts_info, args.workers, args.ps_nodes)
 
+    print('[split_res] Preparing output.', file=sys.stderr)
     cluster_spec = prepare_output(workers, ps)
 
+    print('[split_res] Storing cluster_spec and printing path.',
+          file=sys.stderr)
     return dump_cluster_spec(cluster_spec)
 
 
