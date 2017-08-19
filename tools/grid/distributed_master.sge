@@ -39,7 +39,7 @@ conda info --envs | grep '[*]'
 
 
 # Determine available hosts.
-hosts=($(qstat -f -F h -U $(whoami) | python tools/grid/extract_hosts.py))
+hosts=($(qstat -f -F h -U $(whoami) | python tools/grid/extract_hosts.py $QUEUE))
 
 echo ${#hosts[@]} hosts available: ${hosts[@]}
 
