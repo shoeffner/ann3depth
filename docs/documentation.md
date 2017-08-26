@@ -203,7 +203,7 @@ information.
 
 ## Network architecture and cluster specifications
 
-To effeciently build cluster specifications we divide our grid jobs into a
+To efficently build cluster specifications we divide our grid jobs into a
 single master job and several client jobs. The master job, which we will also
 call "keepalive", will not perform any computations for the TensorFlow models,
 but instead only takes care of proper initialization of the client jobs and
@@ -274,15 +274,109 @@ cippy01.cogsci.uni-osnabrueck.de,5002,ps
   chapter.
 
 The keepalive job parses the information from the stored csv file and submits
-client jobs to the specified hosts, using some environment variables to specify
+client jobs to the specified hosts[^submithost], using some environment variables to specify
 the jobs' tasks.
 
-Each client can, after successful submission, read the JSON file and provide a
-`ClusterSpec` for TensorFlow.
+[^submithost]: This is not the usual way to submit jobs, it is more common to
+  submit to a specific (or the default queue) and let the SGE scheduler decide
+which is the best available host. But since it is (in this approach) very
+important to know the addresses of the hosts for the cluster specification, it
+works better to submit jobs to hosts. This can be achieved using the
+`-l hostname=HOSTNAME` argument for `qsub`.
 
+Each client can, after successful submission, read the JSON file and provide a
+`ClusterSpec` for its TensorFlow session. The TensorFlow sessions are
+implemented as
+[`MonitoredTrainingSession`s](https://www.tensorflow.org/api_docs/python/tf/train/MonitoredTrainingSession).
+
+One big problem with the SGE is that it is not designed for week long training
+of ANNs. Since its purpose is to give all users similar computational resources,
+every now and then it has to kill certain jobs. This happens when a job exceeds
+its walltime. This time can be configured by the SGE administrators and for our
+institute it differs depending on the queue one submits their jobs to. For
+example, if you would submit to the `training.q` queue, you would get a
+walltime of 1.5 hours, while for the `cv.q` queue, which is a queue
+specifically for the Computer Vision workgroup we are affiliated with, we would
+receive walltimes of 36 hours[^walltime]. While it is possible to resubmit a
+job after 36 hours, if can be cumbersome to do this every one and a half.
+That's the main purpose for having the keepalive job: While it performs all
+initializations and creates the cluster specificationns, it is mostly there to
+resubmit jobs before their walltime ends and shut down the old jobs. Its most
+important task is to resubmit itself just before it dies, to keep the loop
+running.
+
+[^walltime]: There are even finer differences, but the problem is really just
+  that we can't just have our jobs running forever and have to watch out for
+how long we can run them.
+
+In case of failure of a single task, the keepalive job will not attempt to
+restart individual jobs on certain machines but instead just kill all tasks and
+resubmit itself, since it is very important to know the hostnames for the
+cluster specifications. For this purpose it checks the status of all its jobs
+every few seconds.
 
 
 # Results of reimplementing Eigen et al.'s MSDN
+
+@eigen2014 used the NYU dataset [@silberman2012] to train their MSDN (they
+also used others, but we decided to just reproduce this particular experiment).
+
+Using some preprocessing scrips we download it, unpack it and create the
+`TFRecords`, a data format native for TensorFlow. We then built a TensorFlow
+model which reads the data, shuffles it into batches and computes the network.
+Due to some limitations of the `MonitoredTrainingSession`[^limitmts] which we were not
+aware of in the beginning we were not able to implement a real validation for
+the validation set.
+
+[^limitmts]: [TensorFlow GitHub Issue #7951](https://github.com/tensorflow/tensorflow/issues/7951)
+
+![The computation graph of the MSDN](MSDNGraphFull.png)
+
+The computation graph contains three main parts: The coarse part, the fine part
+and the optimizers. Eigen et al. used different optimizers for the coarse and
+fine part, so we implemented that as well. As we have some issues with the
+`MomentumOptimizer` (`NaN` errors), we use the `AdamOptimizer` and imitate the
+momentumm without using the momentum changes. We also simplify the problem by
+not providing distorted input versions of the dataset.
+
+To test the impact of distributed computing on the training process, we perform
+four different experiment setups:
+
+1. One single worker node.
+2. One worker node and one ps node.
+3. Two worker nodes.
+4. Four workers nodes and four ps nodes.
+
+Our results turn out to be quite different than Eigen et al.'s: The coarse
+layer's output is much less legible and the fine layers don't look similar as
+well. We assume that the application of our loss functions might be different
+from what they originally did. It seems to be less likely that this is an issue
+of lagging gradients, resulting from the distributed computations. Another
+problem might be that we are just using the optimizers wrong. Before we
+switched to the `AdamOptimizer` we tried it with a less complex structure (one
+optimizer only, training the whole network on the loss function applied to the
+fine output), and the initial results already looked more like what we would
+expect from the outcomes. Unfortunately we did not finish the training and can
+not produce any meaningful results.
+
+![Results of the MSDN. From left to right: input, coarse, fine, target.](MSDNresults.png)
+
+The bad quality of our results is consistent across all our experiments.
+However, computation times differ wildly in each scenario.
+
+Scenario                  Estimated Computation time[^ect]  Training loss
+------------------------- --------------------------------- -------------
+1. 1 worker                                               0             0
+2. 1 worker, 1 ps node                                    0             0
+3. 2 workers                                              0             0
+4. 4 workers, 4 ps nodes                                  0             0
+
+[^ect]: We can only provide estimated computations times as it is difficult to
+  measure the exact times because of the restarts.
+
+We can conclude that for this particular model, a distributed system is not
+beneficial, as the model is small enough to fit on a single GPU and the
+resulting overhead for the inter process communications is too much.
 
 
 # Shortcomings, issues and possible solutions to distributed TensorFlow on the SGE
