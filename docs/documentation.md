@@ -315,6 +315,26 @@ resubmit itself, since it is very important to know the hostnames for the
 cluster specifications. For this purpose it checks the status of all its jobs
 every few seconds.
 
+The clients do not have any specific tasks to perform. They just start their
+training scripts with the parameters provided by the keepalive job. However,
+those training scripts should somehow be able to handle interruptions and
+unexpected shutdowns. The SGE provides a checkpointing mechanism which is
+disabled for our institute's cluster, so we resort to the checkpointing
+mechanism TensorFlow provides. It stores checkpoints every few minutes
+automatically and additionally creates checkpoints on several signals which are
+sent to the process, especially `SIGUSR1`, `SIGUSR2`, `SIGTERM`, and `SIGINT`.
+The `USR` signals are usually sent by the SGE[^sigs], but our grid
+configuration does not send them. Thus we also introduce handling of the alarm
+signal, `SIGALRM`, and start a timer which sends this signal after some
+specified timeout. This ensures that the job notifies itself shortly before the
+walltime is reached. `SIGTERM` and `SIGINT` are mainly handled for debugging
+purposes.
+
+[^sigs]: `SIGUSR1` is sent when a user requests job deletion, `SIGUSR2` some
+  time before the walltime is reached and the parameter `-notify` is set for
+  the grid job. However, once the walltime is reached the jobs receive a
+  `SIGKILL`, which can not be handled.
+
 
 # Results of reimplementing Eigen et al.'s MSDN
 
@@ -381,8 +401,112 @@ resulting overhead for the inter process communications is too much.
 
 # Shortcomings, issues and possible solutions to distributed TensorFlow on the SGE
 
+Despite the achievement of training distributed on the SGE for weeks without
+any serious interruptions, there are some flaws in the process which could
+still be improved. We see that one should choose wisely whether to distribute
+jobs or not (in @eigen2014 there was no benefit in using distributed
+execution), but for cases where it makes sense we will offer some ideas for
+improvements.
+
+
+## Configuration improvements
+
+Our approach relies on the fact that some ports in our university network are
+open internally and can be used for TCP/UDP communication. For networks where
+this is not the case, one could venture into testing ZeroMQ or other
+alternatives. However, even our configuration could be improved by making ports
+consumable resources. At its current state no two different ps nodes can share
+the same host as they would use the same port. If one could check which ports
+are taken while submitting jobs, e.g. through a consumable resource, it would
+be possible to run multiple ps nodes on the same host. This would make sense
+for e.g. hosts with hundreds of gigabytes of RAM where only a few are needed
+for a single ps node. It would also be possible to run a worker on a hosts GPU
+and a ps node on its CPU very easily.
+
+In some cases the day long training seems not to continue, most likely because
+the walltimes are misconfigured for the keepalive jobs -- however, the logs do
+not give any hints about this. It is possible that the `SIGALRM` timeouts are
+configured too aggressively, this could use further investigation. One of the
+biggest problems in our grid is that no notifications (neither `SIGUSR1` nor
+`SIGUSR2`) are sent.
+
+
+## Keepalive script improvements
+
+One major disadvantage of the approach presented in this report is that we
+submit jobs to specific hosts rather than specific queues. This can result in
+race conditionswhen other jobs already start on the same host, or result in
+suboptimal usage of resources, as currently we just request a fix amount of RAM
+rather than just specifying numbers per node type. If one would take
+the time and write a keepalive script which just starts any nodes which are
+suitable as workers and ps nodes and then report themselves to the keepalive
+job, things would get much more flexible. In that case the cluster
+specification could be created after the clients started and before each client
+starts their training session. This would allow for much greater flexibility
+but makes the keepalive code more difficult. For this proof of concept the
+current approach seems fine.
+
+Alongside the above mentioned issue of submission to hosts rather than queues
+the keepalive script could also handle walltimes better. Currently we just use
+a fix timeout for all jobs which is lower than the least available walltime,
+but if the keepalive job would figure out the walltimes of each individual job
+it could be easier to increase them and thus train longer without
+interruptions, reducing the restart overhead.
+
+There is also a rather simple technical issue with many of our keepalive
+scripts as they do not always follow the same patterns. Some work as filters
+like POSIX programs, taking the output of e.g. `qstat` via the standard input
+stream and producing their output into the standard output stream, while others
+write or read specific files, or call other programs themselves. It would be
+beneficial to have them follow the same structure.
+
+
+## TensorFlow improvements
+
+For the TensorFlow scripts there are also some ways to improve, some could be
+achieved within in the project, others have to be done for the TensorFlow
+library itself.
+
+The `ReplicaDeviceSetter`, which takes care of distributing the parameters and
+operations across the cluster, currently mostly only works for ps nodes. It is
+a non-trivial task to perform operation assignments while creating the graph
+and as such one can only resort to manual placement or hope that the option to
+co-locate operations with their data works out well. For the DCF [@liu2016]
+this might have been very helpful.
+
+One problem also seemed to be that some operations are not distributable as
+they are atomic, e.g. the `MatMul` operation can only be performed on one
+device. There might be ways on how to distribute them, but we did not manage to
+do this. One issue could be that the variable partitioners only work on
+specific variables properly, i.e. manually created using `tf.Variable`, and not
+properly with variable scopes (`tf.variable_scope`). Similarly the `tf.map_fn`
+is difficult to handle and might not always be the best choice, it could be
+more beneficial to use slices or replicate parts of the graph during graph
+creation, but this is also subject to future investigations.
+
+The last problem is that currently creating an automatic validation on a test
+set is really difficult using the standard TensorFlow input pipeline and the
+`MonitoredTrainingSession`, as the queues are too inflexible and can not be use
+with one shot iterators or similar high level accesses to use them with
+regularly performed validation hooks. Luckily the developers of the TensorFlow
+library are aware of this problem and propose a fix which can already be tested
+in the latest version (1.3), but it still under active development[^limitmts].
+
 
 # Conclusion
+
+The SGE is not the best choice for distributed computations, but if it is the
+only available option, it is still viable and can be tamed to achieve
+distributed computing. There are still lots of ways to improve the process and
+we look forward to more people setting out to do distributed computations with
+TensorFlow on the SGE. This report is merely a try to start the discussion
+about distributed training on the SGE.
+
+Despite the success in creating a way of using the SGE to perform distributed
+training, we did not achieve the same results in our implementation of the MSDN
+as @eigen2014 originally did. We assume that this is just a problem of our
+implementation and look forward to test the distributed approach on other
+problems, hopefully resulting in better outcomes.
 
 
 # References
