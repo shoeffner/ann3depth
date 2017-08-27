@@ -10,7 +10,7 @@
 ```tex
 @inproceedings{silberman2012,
     author    = "Nathan Silberman and Derek Hoiem and Pushmeet Kohli and Rob Fergus",
-    title     = {Indoor Segmentation and Support Inference from RGBD Images},
+    title     = {Indoor Segmentation and Support Inference from {RGBD} Images},
     booktitle = {ECCV},
     year      = {2012}
 }
