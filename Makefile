@@ -34,7 +34,7 @@ endif
 CLUSTER_PARAMS ?= ${CLUSTER_PARAM1} ${CLUSTER_PARAM2} ${CLUSTER_PARAM3}
 
 # Default training parameters
-MODEL ?= dcnf
+MODEL ?= msdn
 RUNID ?= ''
 STEPS ?= 10000000
 BATCHSIZE ?= 32
