@@ -13,9 +13,15 @@ SELF=$(hostname)
 
 echo =============
 echo ------------- $SELF -------------
+echo $JOB_ID -- $JOB_TYPE - $TASK_INDEX
 echo =============
 
-source activate $CONDAENV
+if [ "$JOB_TYPE" == "ps" ]; then
+    source activate ${CONDAENV-ann3depth}-CPU
+else
+    source activate ${CONDAENV-ann3depth}-GPU
+fi
+echo Active conda environment: $(conda info --envs | grep '*')
 
 # Train
 CLUSTER_SPEC="$CLUSTER_SPEC.json" make train

@@ -50,10 +50,19 @@ def main():
                              job_name=args.job_name,
                              task_index=args.task_index)
 
+    logger.info('Setting up config.')
+    config = tf.ConfigProto(
+        device_count={'CPU': 1,
+                      'GPU': get_num_GPU()},
+        allow_soft_placement=True,
+        log_device_placement=__debug__,
+        gpu_options=tf.GPUOptions(allow_growth=True),
+    )
+
     if args.job_name == 'ps':
         logger.info('Starting ps job.')
         queue = create_done_queue(args.task_index, len(cluster_spec['worker']))
-        with tf.Session(server.target) as session:
+        with tf.Session(server.target, config=config) as session:
             for i in range(len(cluster_spec['worker'])):
                 session.run(queue.dequeue())
     elif args.job_name in ['worker', 'local']:
@@ -61,7 +70,8 @@ def main():
 
         logger.info(f'Task: {args.task_index} -- Chief? {chief}')
 
-        ckptdir = str(os.path.join(args.ckptdir, args.model))
+        run_id = args.model + ('' if not args.id else f'_{args.id}')
+        ckptdir = str(os.path.join(args.ckptdir, run_id))
         logger.info(f'Checkpoint dir is {ckptdir}.')
 
         logger.info('Setting up replica settings.')
@@ -79,19 +89,10 @@ def main():
 
         logger.info(f'Loading model {args.model}.')
         with tf.device(device_setter):
-            inputs, targets = data.inputs(args.datadir, args.dataset, args.batchsize)
-            model_train_op = getattr(models, args.model)(inputs, targets)
+            model_op = setup_model(args)
 
-            size_train = tfhelper.estimate_size_of(tf.GraphKeys.TRAINABLE_VARIABLES)
-            logger.debug(f'Trainable variables have about {size_train:.1f} MB')
-
-        logger.info('Setting up config.')
-        config = tf.ConfigProto(
-            device_count={'CPU': 1,
-                          'GPU': int(os.environ.get('CUDA_VISIBLE_DEVICES', 1))},
-            allow_soft_placement=True,
-            log_device_placement=__debug__,
-        )
+        size_train = tfhelper.estimate_size_of(tf.GraphKeys.TRAINABLE_VARIABLES)
+        logger.debug(f'Trainable variables have about {size_train:.1f} MB')
 
         logger.info('Setting up hooks.')
         stop_at_signal_hook = tfhelper.StopAtSignalHook()
@@ -101,6 +102,7 @@ def main():
             tf.train.FinalOpsHook(create_ps_notifier(cluster_spec)),
             tfhelper.create_summary_hook(tf.GraphKeys.LOSSES, ckptdir,
                                          args.sumfreq),
+            tfhelper.TraceHook(ckptdir, 5000),
         ]
 
         if args.job_name != 'local':
@@ -116,17 +118,31 @@ def main():
                 hooks=hooks,
                 chief_only_hooks=None,
                 save_checkpoint_secs=args.ckptfreq,
-                save_summaries_steps=None,
-                save_summaries_secs=args.sumfreq,
+                save_summaries_steps=args.sumfreq,
+                save_summaries_secs=None,
                 config=config,
                 stop_grace_period_secs=120,
-                log_step_count_steps=100) as session:
+                log_step_count_steps=args.sumfreq) as session:
             while not session.should_stop():
-                session.run(model_train_op)
+                session.run(model_op)
         logger.info('Session stopped.')
         sys.exit(stop_at_signal_hook.signal_received)
     else:
         logger.warning(f'No suitable job description found! {args.job_name}')
+
+
+def setup_model(args):
+    """Sets up the model.
+
+    Args:
+        args: The program args.
+
+    Returns:
+        The model train operation.
+    """
+    model = getattr(models, args.model)
+    inputs, targets = data.inputs(args.datadir, args.dataset, args.batchsize)
+    return model(inputs, targets)
 
 
 def create_done_queue(ps_task, num_workers):
@@ -180,6 +196,28 @@ def create_ps_notifier(cluster_spec):
     return [create_done_queue(i, num_workers).enqueue(1) for i in range(num_ps)]
 
 
+def get_num_GPU():
+    """Determines the number of visible GPUs by checking the
+    CUDA_VISIBLE_DEVICES environments variable.
+
+    See http://acceleware.com/blog/cudavisibledevices-masking-gpus for
+    information about how CUDA_VISIBLE_DEVICES works.
+
+    This function splits the value at , and checks whether the first is -1.
+    If that is the case, 0 GPUs are available.
+    If it is another value, then the number of elements is the number of
+    available GPUs (as those values represent the IDs).
+
+    Returns:
+        The number of available GPUs.
+    """
+    cuda_visible = os.environ.get('CUDA_VISIBLE_DEVICES', '-1').split(',')
+    if cuda_visible[0] == '-1':
+        return 0
+    else:
+        return len(cuda_visible)
+
+
 def parse_args():
     """Parses arguments.
 
@@ -197,10 +235,12 @@ def parse_args():
                         help='Batchsize')
     parser.add_argument('--ckptdir', '-p', default='checkpoints',
                         help='Checkpoint directory')
+    parser.add_argument('--id', default='', type=str,
+                        help='Checkpoint path suffix.')
     parser.add_argument('--ckptfreq', '-f', default=900, type=int,
                         help='Create a checkpoint every N seconds.')
-    parser.add_argument('--sumfreq', '-r', default=150, type=int,
-                        help='Create a summary every N seconds.')
+    parser.add_argument('--sumfreq', '-r', default=100, type=int,
+                        help='Create a summary every N steps.')
     parser.add_argument('--datadir', '-d', default='data', type=str,
                         help='The data directory containing the datasets.')
     parser.add_argument('--timeout', '-k', default=4200, type=int,

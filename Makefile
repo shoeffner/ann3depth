@@ -5,9 +5,16 @@ LOG_DIR := ./grid_logs
 TB_PORT ?= 5003
 
 # Grid parameters
-CONDAENV ?= asuckro-shoeffner-ann3depth
+CONDAENV ?= ann3depth
 PS_NODES ?= 0
 WORKERS ?= 1
+ifdef GRID_QUEUES
+	GRID_QUEUE_ARG = -q ${GRID_QUEUES}
+else
+	GRID_QUEUE_ARG :=
+endif
+GRID_PREFIX ?= a3dx
+MEMORY_RATIO ?= 0.3
 
 ifdef CLUSTER_SPEC
 	CLUSTER_PARAM1 = --cluster-spec=${CLUSTER_SPEC}
@@ -27,13 +34,14 @@ endif
 CLUSTER_PARAMS ?= ${CLUSTER_PARAM1} ${CLUSTER_PARAM2} ${CLUSTER_PARAM3}
 
 # Default training parameters
-MODEL ?= dcnf
+MODEL ?= msdn
+RUNID ?= ''
 STEPS ?= 10000000
 BATCHSIZE ?= 32
 DATASET ?= nyu
-SUM_FREQ ?= 300
+SUM_FREQ ?= 100
 CKPT_FREQ ?= 900
-CKPT_DIR := checkpoints
+CKPT_DIR ?= checkpoints
 TIMEOUT ?= 4200
 
 # Preprocessing parameters
@@ -46,8 +54,9 @@ START ?= 0
 LIMIT ?=
 
 SCRIPT := python3 -O src/ann3depth.py
-COMMON_PARAMETERS := --ckptdir=${CKPT_DIR} --datadir=${DATA_DIR} --model=${MODEL} ${CLUSTER_PARAMS}
-TRAIN_PARAMETERS := --steps=${STEPS} --batchsize=${BATCHSIZE} --ckptfreq=${CKPT_FREQ} --sumfreq=${SUM_FREQ} --timeout=${TIMEOUT}
+SCRIPT_PARAMETERS := --ckptdir=${CKPT_DIR} --datadir=${DATA_DIR} --model=${MODEL} --id=${RUNID} \
+					 --steps=${STEPS} --batchsize=${BATCHSIZE} --ckptfreq=${CKPT_FREQ} \
+					 --sumfreq=${SUM_FREQ} --timeout=${TIMEOUT} ${CLUSTER_PARAMS}
 
 # Check if download is wanted, and if so, set dataset names
 # see http://stackoverflow.com/a/14061796/3004221
@@ -71,16 +80,18 @@ endif
 
 ####### TRAINING ##########
 
-# Trains the network
 .PHONY: train
 train: ${DATA_DIR}
-	${SCRIPT} ${COMMON_PARAMETERS} ${TRAIN_PARAMETERS} ${DATASET}
+	${SCRIPT} ${SCRIPT_PARAMETERS} ${DATASET}
 
-# Submit a grid training job
 .DEFAULT: distributed
 .PHONY: distributed
 distributed: ${LOG_DIR} ./tools/grid/startup.sh
-	PS_NODES=${PS_NODES} WORKERS=${WORKERS} CONDAENV=${CONDAENV} MODEL=${MODEL} STEPS=${STEPS} BATCHSIZE=${BATCHSIZE} DATASET=${DATASET} CKPT_DIR=${CKPT_DIR} CKPT_FREQ=${CKPT_FREQ} SUM_FREQ=${SUM_FREQ} DATA_DIR=${DATA_DIR} TIMEOUT=${TIMEOUT} qsub ./tools/grid/distributed_master.sge
+	MEMORY_RATIO=${MEMORY_RATIO} GRID_QUEUES=${GRID_QUEUES} GRID_PREFIX=${GRID_PREFIX} RUNID=${RUNID} \
+		PS_NODES=${PS_NODES} WORKERS=${WORKERS} CONDAENV=${CONDAENV} MODEL=${MODEL} STEPS=${STEPS} \
+		BATCHSIZE=${BATCHSIZE} DATASET=${DATASET} CKPT_DIR=${CKPT_DIR} CKPT_FREQ=${CKPT_FREQ} \
+		SUM_FREQ=${SUM_FREQ} DATA_DIR=${DATA_DIR} TIMEOUT=${TIMEOUT} \
+		qsub ${GRID_QUEUE_ARG} -N ${GRID_PREFIX}_keepalive ./tools/grid/distributed_master.sge
 
 
 ####### HELPER ##########
@@ -156,7 +167,6 @@ status: ${OUT_DIR}
 		-o ${OUT_DIR}/ann3depth_assh_status.pdf \
 		docs/presentations/Status-presentation.md \
 		docs/presentations/Status-presentation.yaml
-
 
 
 ####### UTILITY ##########

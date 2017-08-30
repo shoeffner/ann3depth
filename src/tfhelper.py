@@ -67,7 +67,25 @@ def make_template(scope=None, create_scope_now_=False, unique_name_=None,
     return make_tf_template
 
 
-def with_scope(scope, *scopeargs, **scopekwargs):
+def name_scope(scope, *scopeargs, **scopekwargs):
+    """A decorator to wrap a function into a tf.name_scope.
+
+    Args:
+        scope: The scope name.
+
+    Returns:
+        The wrapped function.
+    """
+    def add_scope(function):
+        @functools.wraps(function)
+        def wrapper(*args, **kwargs):
+            with tf.name_scope(scope, *scopeargs, **scopekwargs):
+                return function(*args, **kwargs)
+        return wrapper
+    return add_scope
+
+
+def variable_scope(scope, *scopeargs, **scopekwargs):
     """A decorator to wrap a function into a tf.variable_scope.
 
     Args:
@@ -116,7 +134,7 @@ def estimate_size_of(graphkey):
                 for v in tf.get_collection(graphkey)]) * 4 / 1024 / 1024
 
 
-def create_summary_hook(graphkey, ckptdir, secs=150):
+def create_summary_hook(graphkey, ckptdir, steps=150):
     """Adds a summary hook with scalar summaries of tensor values for
     tensors inside the collection of graphkey.
 
@@ -134,7 +152,7 @@ def create_summary_hook(graphkey, ckptdir, secs=150):
         name = '/'.join(tensor.name.split('/')[0:2]).split(':')[0]
         summaries.append(tf.summary.scalar(name, tensor, []))
     summary_op = tf.summary.merge(summaries)
-    return tf.train.SummarySaverHook(save_secs=secs,
+    return tf.train.SummarySaverHook(save_steps=steps,
                                      output_dir=ckptdir,
                                      summary_op=summary_op)
 
@@ -171,12 +189,61 @@ class StopAtSignalHook(tf.train.SessionRunHook):
             run_context.request_stop()
 
 
-class RoundRobinWorker:
-    """If used as a tf.device device function, places each op on the next
-    worker."""
+class TraceHook(tf.train.SessionRunHook):
+    """Hook to perform Traces every N steps."""
 
-    def __init__(self, num_workers=1):
-        self.iter = itertools.cycle(range(num_workers))
+    def __init__(self, ckptdir, every_step=50,
+                 trace_level=tf.RunOptions.FULL_TRACE):
+        """Initializes the TraceHook.
 
-    def __call__(self, n):
-        return f'/job:worker/task:{next(self.iter)}/cpu:0'
+        Traces the 1st (after every restart) and every N-th (total) step.
+
+        Args:
+            ckptdir: The checkpoint directory.
+            every_step: Each N-th step a trace will be performed.
+            trace_level: The trace level to be passed to tf.RunOptions.
+        """
+        self._trace = True
+        self.writer = tf.summary.FileWriter(ckptdir)
+        self.trace_level = trace_level
+        self.every_step = every_step
+
+    def begin(self):
+        """Check if the global step is available inside the graph."""
+        self._global_step_tensor = tf.train.get_global_step()
+        if self._global_step_tensor is None:
+            raise RuntimeError("Global step should be created to use _TraceHook.")
+
+    def before_run(self, run_context):
+        """If a trace is requested, adds tf.RunOptions to the session args.
+
+        Always requests the global step.
+
+        Args:
+            run_context: The run context.
+
+        Returns:
+            SessionRunArgs as described above.
+        """
+        if self._trace:
+            options = tf.RunOptions(trace_level=self.trace_level)
+        else:
+            options = None
+        return tf.train.SessionRunArgs(fetches=self._global_step_tensor,
+                                       options=options)
+
+    def after_run(self, run_context, run_values):
+        """If a trace was requested for this run, store the results.
+        Otherwise check if the next step should request a trace.
+
+        Args:
+            run_context: The original run context.
+            run_values: The resulting run values.
+        """
+        global_step = run_values.results
+        if self._trace:
+            self._trace = False
+            self.writer.add_run_metadata(run_values.run_metadata,
+                                         f'{global_step}', global_step)
+        if not (global_step + 1) % self.every_step:
+            self._trace = True

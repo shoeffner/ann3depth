@@ -1,9 +1,12 @@
 /build/*
 /checkpoints/*
+/checkpoints
 /data/*
 /tb_logs/*
 /grid_logs/*
 /tools/grid/startup.sh
+
+.ignore_hosts
 
 __pycache__
 core

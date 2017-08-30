@@ -1,3 +1,4 @@
+import collections
 import math
 
 import tensorflow as tf
@@ -33,7 +34,7 @@ class _DistributedConvolutionalNeuralFields:
         cols = math.ceil(int(images.shape[2]) / self.sp_size[1])
         return rows, cols
 
-    @tfhelper.with_scope('extract_superpixel')
+    @tfhelper.variable_scope('extract_superpixel')
     def superpixels(self, images):
         # TODO: over-segmentation instead of simple extraction
         superpixels = tf.extract_image_patches(images=images,
@@ -46,7 +47,7 @@ class _DistributedConvolutionalNeuralFields:
                                         self.sp_size[0] * self.sp_size[1],
                                         int(images.shape[-1])))
 
-    @tfhelper.with_scope('extract_patch')
+    @tfhelper.variable_scope('extract_patch')
     def patches(self, images):
         # TODO: use superpixels for patch calculation
         patches = tf.extract_image_patches(images=images,
@@ -81,7 +82,7 @@ class _DistributedConvolutionalNeuralFields:
             temp = tf.layers.dense(temp, 1, activation=None)
         return temp
 
-    @tfhelper.with_scope('unary',
+    @tfhelper.variable_scope('unary',
                          partitioner=tf.variable_axis_size_partitioner((64 << 20) -1))
     def unary_part(self, images):
         patches = self.patches(images)
@@ -91,20 +92,20 @@ class _DistributedConvolutionalNeuralFields:
     def pairwise_dense(self, similarities):
         return tf.layers.dense(similarities, 1, activation=None)
 
-    @tfhelper.with_scope('histogram')
+    @tfhelper.variable_scope('histogram')
     def color_histogram(self, superpixel):
         values = tf.reduce_sum(superpixel * (16777216., 65536., 256.), axis=-1)
         histogram = tf.histogram_fixed_width(values, (0, 16777216.),
                                              256, tf.float32)
         return histogram
 
-    @tfhelper.with_scope('similarity')
+    @tfhelper.variable_scope('similarity')
     def similarity(self, features, pairs):
         left = tf.map_fn(lambda batch: tf.gather(batch, pairs[0]), features)
         right = tf.map_fn(lambda batch: tf.gather(batch, pairs[1]), features)
         return tf.exp(-self.gamma * tf.norm(left - right, axis=2))
 
-    @tfhelper.with_scope('pairwise',
+    @tfhelper.variable_scope('pairwise',
                          partitioner=tf.variable_axis_size_partitioner((64 << 20) -1))
     def pairwise_part(self, images):
         superpixels = self.superpixels(images)
@@ -125,7 +126,7 @@ class _DistributedConvolutionalNeuralFields:
 
         return tf.map_fn(self.pairwise_dense, similarities)
 
-    @tfhelper.with_scope('loss')
+    @tfhelper.variable_scope('loss')
     def loss_part(self, target, z, r):
         superpixels = self.superpixels(target)
         y = tf.reduce_mean(superpixels, axis=2)
@@ -163,7 +164,7 @@ class _DistributedConvolutionalNeuralFields:
             fac /= (tf.matrix_determinant(A) ** .5) + self.epsilon
             inverseA = tf.matrix_inverse(A) + self.epsilon
             exp = tf.squeeze(tf.exp(zT @ inverseA @ z - zT @ z))
-            Z = fac * exp
+            Z = fac * exp + self.epsilon
 
         # Neg log-likelihood
         with tf.name_scope('nll'):
@@ -175,7 +176,10 @@ class _DistributedConvolutionalNeuralFields:
 
         return loss
 
-    def __call__(self, images, depths):
+    def __call__(self, images, depths, train=True):
+        images = tf.image.resize_images(images, [240, 320])
+        depths = tf.image.resize_images(depths, [240, 320])
+
         z = self.unary_part(images)
         r = self.pairwise_part(images)
         loss = self.loss_part(depths, z, r)
@@ -195,26 +199,173 @@ class _DistributedConvolutionalNeuralFields:
         return optimizer.minimize(loss,
                                   tf.train.get_or_create_global_step())
 
-dcnf = _DistributedConvolutionalNeuralFields()
 
+class _MultiScaleDeepNetwork:
+    """Implements Eigen et al. (2014): Depth Map Prediction from a Single Image
+    using a Multi-Scale Deep Network.
+    """
 
-class _MNISTTest:
-    def __call__(self, inputs, targets):
-        temp = tf.reshape(inputs, [-1, 784])
-        temp = tf.layers.dense(temp, 8, activation=tf.nn.relu)
-        temp = tf.layers.dense(temp, 4, activation=tf.nn.relu)
-        temp = tf.layers.dense(temp, 2, activation=tf.nn.relu)
-        temp = tf.layers.dense(temp, 1, activation=tf.nn.sigmoid)
+    @tfhelper.variable_scope('coarse')
+    def coarse(self, images):
+        with tf.variable_scope('conv'):
+            temp = tf.layers.conv2d(images, 96, 11, (4, 4),
+                                    activation=tf.nn.relu, name='conv2d_0')
+            temp = tf.layers.max_pooling2d(temp, 2, 2)
+            temp = tf.layers.conv2d(temp, 256, 5, padding='same',
+                                    activation=tf.nn.relu, name='conv2d_1')
+            temp = tf.layers.max_pooling2d(temp, 2, 2)
+            temp = tf.layers.conv2d(temp, 384, 3, padding='same',
+                                    activation=tf.nn.relu, name='conv2d_2')
+            temp = tf.layers.conv2d(temp, 384, 3, padding='same',
+                                    activation=tf.nn.relu, name='conv2d_3')
+            # Note: Added striding to achieve same activation size
+            temp = tf.layers.conv2d(temp, 256, 3, (2, 2),
+                                    activation=tf.nn.relu, name='conv2d_4')
+
+            temp = tf.reshape(temp, [int(temp.shape[0]), -1])
+
+        with tf.variable_scope('dense'):
+            temp = tf.layers.dense(temp, 4096, activation=tf.nn.relu,
+                                   name='dense_0')
+            temp = tf.layers.dropout(temp, training=self.train)
+            temp = tf.layers.dense(temp, 55 * 74, activation=None,
+                                   name='dense_1')
+
+            temp = tf.reshape(temp, [-1, 55, 74, 1])
+
+        return temp
+
+    @tfhelper.variable_scope('fine')
+    def fine(self, images, coarse):
+        with tf.variable_scope('first'):
+            temp = tf.layers.conv2d(images, 63, 9, (2, 2),
+                                    activation=tf.nn.relu)
+            temp = tf.layers.max_pooling2d(temp, 2, 2)
+
+        with tf.variable_scope('second'):
+            temp = tf.concat([temp, coarse], axis=-1)
+            temp = tf.layers.conv2d(temp, 64, 5, padding='same',
+                                    activation=tf.nn.relu)
+
+        temp = tf.layers.conv2d(temp, 1, 5, padding='same', activation=None,
+                                name='third')
+
+        return temp
+
+    def loss(self, outputs, targets, name):
+        outputs = tf.reshape(outputs, [int(outputs.shape[0]), -1])
+        targets = tf.reshape(targets, [int(targets.shape[0]), -1])
+
+        eps = 1e-8
+        lambd = 0.5
+        log_out = tf.log(outputs + eps)
+        log_out = tf.where(tf.is_nan(log_out), tf.zeros_like(log_out), log_out)
+        log_tar = tf.log(targets + eps)
+        log_tar = tf.where(tf.is_nan(log_tar), tf.zeros_like(log_tar), log_tar)
+
+        l2norm = tf.reduce_sum(tf.square(log_out - log_tar), 1)
+        scaleinv = tf.square(tf.reduce_sum(log_out - log_tar, 1))
+
+        loss = l2norm - lambd / (74 * 55) * scaleinv
+
+        # Mean loss for batch
+        loss = tf.reduce_mean(loss, name=name)
+
+        tf.losses.add_loss(loss)
+        return loss
+
+    def __call__(self, images, depths, train=True):
+        self.train = train
+        global_step = tf.train.get_or_create_global_step()
+
+        with tf.name_scope('preprocessing'):
+            images = tf.image.resize_images(images, [228, 304])
+            depths = tf.image.resize_images(depths, [55, 74])
+
+        coarse = self.coarse(images)
+        outputs = self.fine(images, coarse)
+
+        with tf.name_scope('loss'):
+            loss_coarse = self.loss(coarse, depths, 'coarse_loss')
+            loss_fine = self.loss(outputs, depths, 'fine_loss')
 
         with tf.name_scope('summaries'):
-            output = tf.cast(temp, tf.uint8)
-            tf.summary.scalar('Output', output)
-            tf.summary.image('Input', inputs, max_outputs=1)
-            tf.summary.scalar('Target', targets)
+            tf.summary.image('Input', images, max_outputs=3)
+            tf.summary.image('Coarse', coarse, max_outputs=3)
+            tf.summary.image('Fine', outputs, max_outputs=3)
+            tf.summary.image('Target', depths, max_outputs=3)
 
-        optimizer = tf.train.AdamOptimizer()
-        loss = tf.losses.mean_squared_error(tf.cast(targets, tf.float32), temp)
-        return optimizer.minimize(loss,
-                                  tf.train.get_or_create_global_step())
+        return self.optimizers(loss_coarse, loss_fine,
+                               global_step, int(images.shape[0]))
 
-mnist = _MNISTTest()
+    def optimizers(self, loss_coarse, loss_fine, global_step, batchsize):
+        samples_coarse = 2000000
+        samples_fine = 1500000
+        steps_coarse = samples_coarse // batchsize
+        steps_fine = samples_fine // batchsize
+
+        def create_optimizer(loss, rate, momentum, collections,
+                             name='Adam'):
+            optimizer = tf.train.AdamOptimizer(rate, momentum, 1, name=name)
+
+            vars = []
+            for c in collections:
+                vars += tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, c)
+            grad_vars = optimizer.compute_gradients(loss, var_list=vars)
+            grad, vars = list(zip(*grad_vars))
+            return optimizer, grad_vars
+
+        def coarse_optimizers():
+            opt1, grad_vars1 = create_optimizer(loss_coarse, 0.001, 0.9,
+                                                ['coarse/conv'],
+                                                'CoarseConv')
+            opt2, grad_vars2 = create_optimizer(loss_coarse, 0.1, 0.9,
+                                                ['coarse/dense'],
+                                                'CoarseDense')
+
+            control_deps = next(zip(*grad_vars1, *grad_vars2))
+            with tf.control_dependencies(control_deps):
+                return tf.group(
+                    opt1.apply_gradients(grad_vars1, global_step),
+                    opt2.apply_gradients(grad_vars2)
+                )
+
+        def fine_optimizers():
+            opt1, grad_vars1 = create_optimizer(loss_fine, 0.001, 0.9,
+                                                ['fine/first', 'fine/third'],
+                                                'FineA')
+            opt2, grad_vars2 = create_optimizer(loss_fine, 0.01, 0.9,
+                                                ['fine/second'], 'FineB')
+
+            control_deps = next(zip(*grad_vars1, *grad_vars2))
+            with tf.control_dependencies(control_deps):
+                return tf.group(
+                    opt1.apply_gradients(grad_vars1, global_step),
+                    opt2.apply_gradients(grad_vars2)
+                )
+
+        with tf.name_scope('optimizers'):
+            cond_fine = tf.logical_and(steps_coarse <= global_step,
+                                       global_step < (steps_coarse +
+                                                      steps_fine))
+            cond_coarse = global_step < steps_coarse
+
+            train = tf.case(
+                collections.OrderedDict([(cond_fine, fine_optimizers),
+                                         (cond_coarse, coarse_optimizers)]),
+                default=lambda: tf.group(tf.assign_add(global_step, 1)),
+                exclusive=True,
+                name='optimizers'
+            )
+
+            phase = tf.case(collections.OrderedDict([(cond_fine, lambda: 2),
+                                                     (cond_coarse, lambda: 1)]),
+                            default=lambda: 3, exclusive=True,
+                            name='DeterminePhase')
+            tf.summary.scalar('Phase', phase)
+
+        return train
+
+
+dcnf = _DistributedConvolutionalNeuralFields()
+msdn = _MultiScaleDeepNetwork()
