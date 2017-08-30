@@ -1,7 +1,7 @@
 requests>=2.13.0
 numpy
 scipy
-matplotlib>=2.0.0
 pillow
 h5py
+tensorboard
 pandoc-img-glob
