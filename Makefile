@@ -136,6 +136,7 @@ doc: ${OUT_DIR}
 	pandoc \
 		-o ${OUT_DIR}/ann3depth_assh_documentation.pdf \
 		--bibliography=docs/references.bib \
+		--filter pandoc-img-glob \
 		docs/documentation.md \
 		docs/documentation.yaml
 

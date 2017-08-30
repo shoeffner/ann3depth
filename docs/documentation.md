@@ -350,7 +350,7 @@ the validation set.
 
 [^limitmts]: [TensorFlow GitHub Issue #7951](https://github.com/tensorflow/tensorflow/issues/7951)
 
-![The computation graph of the MSDN](MSDNGraphFull.png)
+![The computation graph of the MSDN](img/MSDNGraphFull.png)
 
 The computation graph contains three main parts: The coarse part, the fine part
 and the optimizers. Eigen et al. used different optimizers for the coarse and
@@ -363,7 +363,7 @@ To test the impact of distributed computing on the training process, we perform
 four different experiment setups:
 
 1. One single worker node.
-2. One worker node and one ps node.
+2. One worker node and two ps nodes.
 3. Two worker nodes.
 4. Four workers nodes and four ps nodes.
 
@@ -379,20 +379,26 @@ fine output), and the initial results already looked more like what we would
 expect from the outcomes. Unfortunately we did not finish the training and can
 not produce any meaningful results.
 
-![Results of the MSDN. From left to right: input, coarse, fine, target.](MSDNresults.png)
+![Results of the MSDN. From left to right: input, coarse, fine, target. From
+top to bottom: 1 worker, 1 worker/2 ps node, 2 workers, 4 workers/4 ps
+nodes. The input images are resized to match the output
+sizes.](img/MSDNresults.png)
 
 The bad quality of our results is consistent across all our experiments.
 However, computation times differ wildly in each scenario.
 
-Scenario                  Estimated Computation time[^ect]  Training loss
-------------------------- --------------------------------- -------------
-1. 1 worker                                               0             0
-2. 1 worker, 1 ps node                                    0             0
-3. 2 workers                                              0             0
-4. 4 workers, 4 ps nodes                                  0             0
+Scenario                     Estimated Computation time[^ect] Training loss
+---------------------------- -------------------------------- -------------
+1. 1 worker                                        9 h 30 min         0.8e4
+2. 1 worker, 2 ps nodes[^nd]                  3 d 21 h 30 min         2.6e4
+3. 2 workers                                             20 h         1.0e4
+4. 4 workers, 4 ps nodes                             4 d 16 h         1.6e4
 
 [^ect]: We can only provide estimated computations times as it is difficult to
-  measure the exact times because of the restarts.
+  measure the exact times because of the restarts. It is also difficult to
+  compare these values, as hosts changed and thus the hardware changed as well.
+[^nd]: The training for the scenario 1w/2ps did not properly finish and is an
+  intermediate result after ca. 30k steps.
 
 We can conclude that for this particular model, a distributed system is not
 beneficial, as the model is small enough to fit on a single GPU and the
