@@ -382,7 +382,7 @@ not produce any meaningful results.
 ![Results of the MSDN. From left to right: input, coarse, fine, target. From
 top to bottom: 1 worker, 1 worker/2 ps node, 2 workers, 4 workers/4 ps
 nodes. The input images are resized to match the output
-sizes.](img/MSDNresults.png)
+sizes.](img/MSDNResults.png)
 
 The bad quality of our results is consistent across all our experiments.
 However, computation times differ wildly in each scenario.
