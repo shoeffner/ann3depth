@@ -9,7 +9,7 @@ estimates are difficult to achieve.
 At the start of our project we set out to build an artificial neural network (ANN)
 which would be capable of identifying depth in video streams, potentially using
 information about movements between images to make better estimates than single
-images would allow. But over the course of the project it turned out to be hard
+images. But over the course of the project it turned out to be hard
 enough to reproduce state of the art models for single monocular images, such
 that we tuned down our project ideas.
 
@@ -20,7 +20,7 @@ which inspired parts of Liu et al.'s approach. While implementing Liu et al.'s
 DCNF, we quickly stumbled over a problem: Many matrices became simply too
 big to be computed on a single GPU. Eventually we managed to get it to run by
 simplifying the model greatly and using a batch size of only one sample. We
-then tried something new: We tried to run the model distributed across the
+then tried something new: running the model distributed across the
 university's on premise data center.
 
 This worked out quite well, but for the DCNF implementation we did not
@@ -83,7 +83,7 @@ TensorFlow is an open source software library that abstracts complex
 mathematical models and data flows to allow for optimized computation. We used
 version 1.3r of the Python API (documentation can be found
 [here](https://www.tensorflow.org/api_docs/python/)) to implement the models
-presented in the papers. Conceptually TensorFlow requires the User to build a
+presented in the papers. Conceptually TensorFlow requires the user to build a
 computational graph - a recipe for the data and the operations applied to it.
 The nodes in the graph are either tensors, multi-dimensional arrays that contain
 the data, or operations, that compute a function given some input tensors. As
@@ -92,16 +92,16 @@ overall program. Additional mechanisms like scoping helps to reuse computational
 building blocks like a convolutional layer again and again and structuring
 the graph while constructing it. The final graph can be then executed in a
 TensorFlow session to operate on the real input data. TensorFlow then takes care
-of computational and hardware based optimizations that meant for our project the
-usage of the graphics card of the hosts. TensorFlow comes with an own monitoring
-tool that allows for visualization of the training process as well as
-representations of the graph.
+of computational and hardware based optimizations which resulted for our project
+in the usage of the graphics card of the hosts. TensorFlow comes with an
+own monitoring tool that allows for visualization of the training process as
+well as representations of the graph.
 
 
 # Distributed computing using the SGE
 
 Sometimes machine learning models are too big for a single processing unit,
-even too big for the available random accesss memory (RAM). To handle such
+even too big for the available random access memory (RAM). To handle such
 models, TensorFlow supports the concept of distributed computing. In the
 distributed setting, multiple processing units ("workers") process a stream of
 data stored on multiple parameter servers ("ps node"). TensorFlow is designed
@@ -155,7 +155,7 @@ which can be represented as a simple JSON:
 ```
 
 Here we use eight different hosts, four as workers and four as ps nodes. In the
-following sections we describe how the processs can communicate with each
+following sections we describe how the processes can communicate with each
 other, how we generate the cluster specifications automatically, and how we
 overcome the problem of walltimes, the time after which the SGE kills a running
 process to free resources for other users.
@@ -203,11 +203,11 @@ information.
 
 ## Network architecture and cluster specifications
 
-To efficently build cluster specifications we divide our grid jobs into a
+To efficiently build cluster specifications we divide our grid jobs into a
 single master job and several client jobs. The master job, which we will also
 call "keepalive", will not perform any computations for the TensorFlow models,
-but instead only takes care of proper initialization of the client jobs and
-restarts them as needed. The client jobs will then either run worker or ps node
+but instead only take care of proper initialization of the client jobs and
+restarting them as needed. The client jobs will then either run worker or ps node
 processes using a cluster specification provided by the keepalive job.
 
 The keepalive job goes through several steps:
@@ -249,10 +249,9 @@ The information is parsed and stored. In the example above we have the
 following relevant resources: available memory of 31.4 GB RAM, a graphics card
 with CUDA support and 384 CUDA cores. Additionally we can see how many slots
 are available per queue for this host (for training.q it is `0/0/2`, which
-means 0 reserved, 0 in use, 2 available). The Python script
-`split_resources.py` uses
-the information available to distribute the tasks in a greedy fashion among the
-available devices. Assuming e.g. four workers and four ps nodes, it would
+means 0 reserved, 0 in use, 2 available). The Python script `split_resources.py`
+uses the information available to distribute the tasks in a greedy fashion among
+the available devices. Assuming e.g. four workers and four ps nodes, it would
 assign devices with high RAM values as ps nodes and devices with many CUDA
 cores to the workers. The resulting cluster specification is stored as a csv
 file (which is easier to parse with the keepalive job) and as a JSON (which
@@ -299,14 +298,14 @@ walltime of 1.5 hours, while for the `cv.q` queue, which is a queue
 specifically for the Computer Vision workgroup we are affiliated with, we would
 receive walltimes of 36 hours[^walltime]. While it is possible to resubmit a
 job after 36 hours, if can be cumbersome to do this every one and a half.
-That's the main purpose for having the keepalive job: While it performs all
+That is the main purpose for having the keepalive job: While it performs all
 initializations and creates the cluster specificationns, it is mostly there to
 resubmit jobs before their walltime ends and shut down the old jobs. Its most
 important task is to resubmit itself just before it dies, to keep the loop
 running.
 
 [^walltime]: There are even finer differences, but the problem is really just
-  that we can't just have our jobs running forever and have to watch out for
+  that we can not just have our jobs running forever and have to watch out for
 how long we can run them.
 
 In case of failure of a single task, the keepalive job will not attempt to
@@ -356,7 +355,7 @@ The computation graph contains three main parts: The coarse part, the fine part
 and the optimizers. Eigen et al. used different optimizers for the coarse and
 fine part, so we implemented that as well. As we have some issues with the
 `MomentumOptimizer` (`NaN` errors), we use the `AdamOptimizer` and imitate the
-momentumm without using the momentum changes. We also simplify the problem by
+momentum without using the momentum changes. We also simplify the problem by
 not providing distorted input versions of the dataset.
 
 To test the impact of distributed computing on the training process, we perform
@@ -441,7 +440,7 @@ biggest problems in our grid is that no notifications (neither `SIGUSR1` nor
 
 One major disadvantage of the approach presented in this report is that we
 submit jobs to specific hosts rather than specific queues. This can result in
-race conditionswhen other jobs already start on the same host, or result in
+race conditions when other jobs already start on the same host, or result in
 suboptimal usage of resources, as currently we just request a fix amount of RAM
 rather than just specifying numbers per node type. If one would take
 the time and write a keepalive script which just starts any nodes which are
